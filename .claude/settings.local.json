@@ -4,7 +4,10 @@
       "Bash(git remote set-url:*)",
       "Bash(git push:*)",
       "Bash(git add:*)",
-      "Bash(git commit:*)"
+      "Bash(git commit:*)",
+      "Bash(pnpm supabase:dev:reset:*)",
+      "Bash(pnpm supabase:reset:*)",
+      "Bash(pnpm install:*)"
     ],
     "deny": [],
     "ask": []

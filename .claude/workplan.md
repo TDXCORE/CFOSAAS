@@ -12,11 +12,12 @@
 
 ### Milestone 1.1: Setup y Configuración Base (Semana 1-2)
 - [x] Setup repositorio con Supabase
-- [ ] Configurar variables de entorno para producción
-- [ ] Setup CI/CD pipeline en Vercel
+- [x] Configurar variables de entorno para producción
+- [x] Setup CI/CD pipeline en Vercel
 - [ ] Configurar monitoreo básico (Sentry)
-- [ ] Implementar esquema de base de datos inicial
-- [ ] Setup autenticación multi-tenant
+- [x] Implementar esquema de base de datos inicial
+- [x] Cargar datos semilla (PUC, reglas tributarias Colombia)
+- [x] Setup autenticación multi-tenant
 
 **Entregables:**
 - Aplicación deployada en Vercel
