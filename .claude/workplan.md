@@ -3,8 +3,10 @@
 ## Información del Proyecto
 - **Nombre:** Plataforma SaaS de Asistencia Financiera y Automatización Contable
 - **Stack Base:** Next.js 15 + React 19 + Supabase + TypeScript + Tailwind CSS
-- **Repositorio:** NextJS SaaS Starter Kit Lite (Makerkit)
-- **Objetivo:** Democratizar herramientas financieras avanzadas para PYMES en LATAM
+- **Repositorio:** NextJS SaaS Starter Kit Lite (Makerkit) - Monorepo
+- **Plataforma:** Vercel (hosting y deployment)
+- **País:** Colombia únicamente
+- **Objetivo:** Democratizar herramientas financieras avanzadas para PYMES en Colombia
 
 ## Fase 1: MVP - Foundation (3 meses)
 
@@ -22,22 +24,25 @@
 - Autenticación funcionando
 
 ### Milestone 1.2: Core Invoice Processing (Semana 3-6)
-- [ ] Implementar procesador de archivos XML (facturas electrónicas)
-- [ ] Sistema de ingesta de emails con archivos ZIP
-- [ ] Extractor y parser de archivos comprimidos
-- [ ] Motor básico de clasificación PUC (Plan Único de Cuentas)
-- [ ] Sistema de cálculo de impuestos básico (IVA, Retención)
+- [ ] Implementar procesador de archivos XML (facturas electrónicas UBL)
+- [ ] Sistema de ingesta de emails con Microsoft Graph API (O365/Outlook)
+- [ ] Extractor y parser de archivos ZIP con múltiples facturas
+- [ ] Motor básico de clasificación PUC Colombia
+- [ ] Sistema de cálculo de impuestos Colombia (IVA 19%, Retención)
 - [ ] Interface de carga manual de facturas
+- [ ] Integración con Supabase Storage para archivos
 
 **Entregables:**
 - Módulo de procesamiento de facturas XML funcional
 - Sistema de email processing con ZIP
 - Interface web para carga de facturas
 
-### Milestone 1.3: Dashboard y Reportes Básicos (Semana 7-9)
-- [ ] Dashboard financiero con KPIs básicos
+### Milestone 1.3: AI CFO y Dashboard (Semana 7-9)
+- [ ] AI CFO virtual con OpenAI GPT-4 Turbo (CFO experto)
+- [ ] Dashboard financiero con KPIs específicos para Colombia
+- [ ] Sistema de chat conversacional con el CFO virtual
 - [ ] Reportes de facturas procesadas
-- [ ] Sistema de exportación (CSV, Excel)
+- [ ] Sistema de exportación (CSV, Excel) - almacenamiento local
 - [ ] Módulo de validación manual (checkpoints)
 - [ ] Interface de gestión de empresas (multi-tenant)
 
@@ -60,26 +65,26 @@
 
 ## Fase 2: AI CFO y Mejoras (6 meses)
 
-### Milestone 2.1: AI CFO Foundation (Mes 4-5)
-- [ ] Integración con OpenAI GPT-4
-- [ ] Motor de análisis financiero sectorial
-- [ ] Sistema de alertas inteligentes
-- [ ] Chatbot financiero básico
-- [ ] Integración con datos sectoriales (Cámara de Comercio)
+### Milestone 2.1: AI CFO Avanzado (Mes 4-5)
+- [ ] AI CFO con contexto empresarial profundo
+- [ ] Motor de análisis financiero sectorial Colombia
+- [ ] Sistema de alertas inteligentes y recomendaciones
+- [ ] Análisis de riesgos automático
+- [ ] Insights proactivos y benchmarking sectorial
 
 ### Milestone 2.2: Advanced Processing (Mes 5-6)
-- [ ] OCR para facturas PDF/imágenes
-- [ ] Motor avanzado de reglas tributarias
-- [ ] Sistema de clasificación automática mejorado
+- [ ] OCR para facturas PDF con OpenAI Vision
+- [ ] Motor avanzado de reglas tributarias Colombia
+- [ ] Sistema de clasificación PUC con Machine Learning
 - [ ] Validación por muestreo estadístico
-- [ ] APIs para integraciones externas
+- [ ] Optimizaciones de performance en Vercel
 
-### Milestone 2.3: Integraciones y APIs (Mes 7-8)
-- [ ] API REST para integraciones
-- [ ] Conectores para Siigo, SAP, World Office
+### Milestone 2.3: Extensiones y APIs (Mes 7-8)
+- [ ] API REST para integraciones futuras
 - [ ] Sistema de webhooks
+- [ ] Exportación a formatos contables estándar
 - [ ] SDK para desarrolladores
-- [ ] Marketplace de extensiones básico
+- [ ] Preparación para integraciones contables futuras
 
 ### Milestone 2.4: Enhanced UX (Mes 9)
 - [ ] Sistema de roles y permisos avanzado
@@ -90,19 +95,19 @@
 
 ## Fase 3: Escalamiento Regional (12 meses)
 
-### Milestone 3.1: Multi-país (Mes 10-11)
-- [ ] Soporte para Ecuador y Venezuela
-- [ ] Motor de reglas tributarias por país
-- [ ] Localización completa (i18n)
-- [ ] Integración con bancos locales
-- [ ] Compliance legal por país
-
-### Milestone 3.2: Advanced Analytics (Mes 12)
-- [ ] BI Dashboard avanzado
-- [ ] Predicciones con Machine Learning
-- [ ] Benchmarking sectorial automático
+### Milestone 3.1: Optimización Colombia (Mes 10-11)
+- [ ] Optimización avanzada para normativa colombiana
+- [ ] Integración con bancos colombianos (Open Banking)
+- [ ] Compliance DIAN y Supersociedades
 - [ ] Reportes regulatorios automáticos
-- [ ] Data export avanzado
+- [ ] Integraciones con sistemas contables colombianos
+
+### Milestone 3.2: Advanced Analytics Colombia (Mes 12)
+- [ ] BI Dashboard con datos sectoriales Colombia
+- [ ] Predicciones con Machine Learning
+- [ ] Benchmarking sectorial automático Colombia
+- [ ] Integración con DIAN (consultas y validaciones)
+- [ ] Móvil app (React Native) para consultas rápidas
 
 ## Criterios de Éxito por Fase
 
@@ -134,18 +139,20 @@
 - 1 Especialista en contabilidad/finanzas (consultor)
 
 ### Dependencias Externas
-- APIs de OpenAI para IA
-- Servicios de OCR (Azure Cognitive Services)
-- Datos sectoriales (Cámara de Comercio)
-- Compliance legal (asesor tributario)
-- Infraestructura cloud (Vercel + Supabase)
+- APIs de OpenAI para CFO virtual
+- Microsoft Graph API para emails O365/Outlook
+- Supabase para base de datos y storage
+- Datos sectoriales Colombia (fuentes públicas)
+- Compliance legal Colombia (asesor tributario)
+- Infraestructura Vercel + Supabase
 
 ## Riesgos y Mitigaciones
 
 ### Riesgos Técnicos
 - **Calidad de datos:** Implementar validaciones múltiples
-- **Escalabilidad:** Arquitectura serverless desde inicio
+- **Escalabilidad:** Arquitectura serverless en Vercel desde inicio
 - **Seguridad:** Auditorías de seguridad regulares
+- **Dependencia de O365:** Plan B con otros proveedores email
 
 ### Riesgos de Negocio
 - **Adopción lenta:** UX simple + onboarding guiado

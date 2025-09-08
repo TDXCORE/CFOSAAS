@@ -2,35 +2,41 @@
 
 ## Arquitectura del Sistema
 
-### Stack Tecnológico
+### Stack Tecnológico - Enfocado en Colombia
 ```typescript
 interface TechStack {
   frontend: {
-    framework: "Next.js 15" // App Router
+    framework: "Next.js 15" // App Router - Optimizado para Vercel
     ui: "React 19" | "TypeScript 5.8"
     styling: "Tailwind CSS 4.1" | "shadcn/ui"
     state: "TanStack Query 5" | "Zustand"
     forms: "React Hook Form 7" | "Zod"
-    i18n: "react-i18next 15"
+    i18n: "react-i18next 15" // Solo español (Colombia)
   }
   backend: {
-    database: "Supabase PostgreSQL"
+    database: "Supabase PostgreSQL" // RLS nativo
     auth: "Supabase Auth + MFA"
-    storage: "Supabase Storage"
-    apis: "Next.js API Routes" | "Supabase Edge Functions"
+    storage: "Supabase Storage" // Para archivos XML/PDF
+    apis: "Next.js API Routes" // Edge-compatible
     realtime: "Supabase Realtime"
   }
   ai: {
-    llm: "OpenAI GPT-4 Turbo"
-    ocr: "Azure Computer Vision"
-    processing: "Azure Functions"
+    llm: "OpenAI GPT-4 Turbo" // CFO virtual experto
+    ocr: "OpenAI Vision" // Para facturas PDF
     embedding: "OpenAI text-embedding-3-small"
+    analysis: "OpenAI GPT-4" // Análisis financiero
   }
   infrastructure: {
-    hosting: "Vercel" | "Supabase Cloud"
+    hosting: "Vercel" // Primary platform
     cdn: "Vercel Edge Network"
     monitoring: "Sentry" | "Vercel Analytics"
-    cicd: "GitHub Actions"
+    cicd: "GitHub Actions → Vercel"
+    monorepo: "Makerkit structure"
+  }
+  integrations: {
+    email: "Microsoft Graph API (O365/Outlook)"
+    storage: "Supabase Storage buckets"
+    country: "Colombia only" // Reglas tributarias colombianas
   }
 }
 ```
@@ -76,11 +82,9 @@ interface InvoiceProcessingEngine {
     notification: EventEmitter | WebhookDispatcher
   }
   
-  // Configuración por país
+  // Configuración específica para Colombia
   countryConfig: {
-    colombia: ColombianTaxRules
-    ecuador: EcuadorianTaxRules
-    venezuela: VenezuelanTaxRules
+    colombia: ColombianTaxRules // Único país soportado
   }
 }
 
@@ -113,18 +117,21 @@ class InvoiceProcessingPipeline {
 #### Procesamiento de Email con ZIP
 ```typescript
 interface EmailProcessingSystem {
-  // IMAP/POP3 client para lectura de emails
+  // Microsoft Graph API para O365/Outlook
   emailReader: {
-    protocols: ['IMAP', 'POP3', 'Microsoft Graph API']
+    protocol: 'Microsoft Graph API' // Único protocolo soportado
+    authentication: 'OAuth 2.0 + PKCE'
     filters: {
       sender: string[]
-      subject: RegExp[]
+      subject: RegExp[] // Buscar 'factura', 'invoice', etc.
       hasAttachments: boolean
+      fileTypes: ['.zip', '.xml', '.pdf']
     }
     polling: {
       interval: number // 5 minutos
       maxEmails: number // 100 por batch
     }
+    compatibility: 'Vercel Edge Functions'
   }
 
   // Extractor de archivos ZIP
@@ -278,15 +285,11 @@ class PUCClassifier {
 
 ### 3. Motor de Cálculo de Impuestos
 
-#### Engine Tributario Multi-país
+#### Engine Tributario Colombia
 ```typescript
 interface TaxCalculationEngine {
-  // Motores por país
-  engines: {
-    colombia: ColombianTaxEngine
-    ecuador: EcuadorianTaxEngine
-    venezuela: VenezuelanTaxEngine
-  }
+  // Motor único para Colombia
+  engine: ColombianTaxEngine
 
   // Reglas tributarias
   rules: {
@@ -305,7 +308,7 @@ interface TaxCalculationEngine {
   }
 }
 
-// Implementación Colombia
+// Implementación única para Colombia
 class ColombianTaxEngine implements TaxEngine {
   calculateTaxes(invoice: InvoiceData): TaxCalculationResult {
     const results: TaxCalculationResult = {
@@ -416,13 +419,13 @@ interface AICFOSystem {
     alertSystem: IntelligentAlertSystem
   }
 
-  // Fuentes de datos
+  // Fuentes de datos Colombia
   dataSources: {
     internal: CompanyFinancialData
     external: {
-      sectorBenchmarks: CamaraComercioData
-      economicIndicators: BancoRepublicaAPI
-      marketTrends: ExternalMarketData
+      economicIndicators: BancoRepublicaAPI // Banco Central Colombia
+      marketTrends: ColombianMarketData
+      // Nota: No integración con Cámara de Comercio por ahora
     }
   }
 
@@ -492,23 +495,31 @@ class FinancialInsightGenerator {
   }
 }
 
-// Chatbot financiero
+// CFO Virtual Experto para Colombia
 class FinancialChatbot {
   private systemPrompt = `
-    Eres un CFO virtual experto en finanzas para PYMES en Colombia.
+    Eres un CFO virtual experto, especializado en finanzas para PYMES en Colombia.
     
-    Contexto:
-    - Hablas en español colombiano
-    - Te enfocas en consejos prácticos y accionables
-    - Conoces la normatividad tributaria colombiana
-    - Entiendes las particularidades de las PYMES
+    Tu experiencia incluye:
+    - 15+ años como CFO en empresas colombianas
+    - Experto en normatividad tributaria colombiana (DIAN, Estatuto Tributario)
+    - Conocimiento profundo de NIIF para PYMES
+    - Experiencia en sectores: comercio, servicios, manufactura
+    - Especialista en optimización fiscal y flujo de caja
+    
+    Contexto operativo:
+    - Hablas en español colombiano profesional
+    - Consejos prácticos y accionables
+    - Análisis basado en datos reales
+    - Recomendaciones estratégicas personalizadas
     
     Cuando respondas:
-    - Sé conciso pero completo
-    - Incluye números y métricas cuando sea posible
-    - Sugiere acciones concretas
-    - Menciona riesgos si es relevante
-    - Haz referencias a la normatividad si aplica
+    - Actúa como un CFO experimentado
+    - Incluye análisis cuantitativo cuando sea posible
+    - Sugiere acciones concretas con timeline
+    - Identifica riesgos y oportunidades
+    - Referencias específicas a normatividad colombiana
+    - Proporciona benchmarks sectoriales cuando aplique
   `;
 
   async processQuery(
@@ -561,20 +572,16 @@ interface IntegrationSystem {
 
   // Conectores disponibles
   connectors: {
-    accounting: {
-      siigo: SiigoConnector
-      sap: SAPBusinessOneConnector
-      worldoffice: WorldOfficeConnector
-      contabilidad: ContabilidadConnector
+    email: {
+      microsoftGraph: O365OutlookConnector // Único conector de email
     }
-    banking: {
-      bancolombia: BancolombiaConnector
-      davivienda: DaviviendaConnector
+    storage: {
+      supabase: SupabaseStorageConnector // Almacenamiento de documentos
     }
-    government: {
-      dian: DIANConnector
-      camaraComercio: CamaraComercioConnector
+    ai: {
+      openai: OpenAIConnector // CFO virtual y análisis
     }
+    // Nota: Sin integraciones contables o gubernamentales en MVP
   }
 
   // Webhooks y eventos
@@ -599,50 +606,48 @@ abstract class AccountingSystemConnector {
   }
 }
 
-// Implementación específica para Siigo
-class SiigoConnector extends AccountingSystemConnector {
-  private baseURL = 'https://api.siigo.com/v1';
-  private credentials: SiigoCredentials;
+// Conector Microsoft Graph API para O365/Outlook
+class O365OutlookConnector implements EmailConnector {
+  private graphClient: Client;
+  private baseURL = 'https://graph.microsoft.com/v1.0';
 
-  async authenticate(): Promise<AuthToken> {
-    const response = await fetch(`${this.baseURL}/auth`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        username: this.credentials.username,
-        access_key: this.credentials.accessKey
-      })
-    });
-
-    const data = await response.json();
-    return {
-      token: data.access_token,
-      expiresIn: data.expires_in,
-      tokenType: 'Bearer'
-    };
+  constructor(credentials: MicrosoftGraphCredentials) {
+    // Compatible con Vercel Edge Functions
+    this.graphClient = this.initializeGraphClient(credentials);
   }
 
-  async exportInvoices(invoices: ProcessedInvoice[]): Promise<ExportResult> {
-    const results: ExportResult = {
-      successful: [],
+  async processInvoiceEmails(): Promise<EmailProcessingResult> {
+    const searchQuery = this.buildInvoiceSearchQuery();
+    
+    // Buscar emails con adjuntos de facturas
+    const messages = await this.graphClient
+      .api('/me/messages')
+      .search(searchQuery)
+      .select(['id', 'subject', 'from', 'hasAttachments', 'receivedDateTime'])
+      .filter('hasAttachments eq true')
+      .top(50)
+      .get();
+
+    const results: EmailProcessingResult = {
+      processed: [],
       failed: [],
-      totalProcessed: invoices.length
+      totalProcessed: messages.value.length
     };
 
-    for (const invoice of invoices) {
+    for (const message of messages.value) {
       try {
-        const siigoInvoice = this.transformToSiigoFormat(invoice);
-        const response = await this.createInvoiceInSiigo(siigoInvoice);
-        results.successful.push({
-          originalId: invoice.id,
-          externalId: response.id,
-          status: 'exported'
-        });
+        const attachments = await this.getMessageAttachments(message.id);
+        const processResult = await this.processAttachments(message, attachments);
+        
+        results.processed.push(processResult);
+
+        // Marcar como procesado en Outlook
+        await this.markAsProcessed(message.id);
+        
       } catch (error) {
         results.failed.push({
-          originalId: invoice.id,
-          error: error.message,
-          status: 'failed'
+          messageId: message.id,
+          error: error.message
         });
       }
     }
@@ -650,35 +655,63 @@ class SiigoConnector extends AccountingSystemConnector {
     return results;
   }
 
-  private transformToSiigoFormat(invoice: ProcessedInvoice): SiigoInvoice {
+  private async processAttachments(
+    message: any, 
+    attachments: any[]
+  ): Promise<ProcessedEmailResult> {
+    const results: ProcessedAttachment[] = [];
+
+    for (const attachment of attachments) {
+      if (this.isInvoiceAttachment(attachment)) {
+        // Guardar en Supabase Storage
+        const storageUrl = await this.saveToSupabaseStorage(
+          attachment.contentBytes,
+          attachment.name,
+          message.from.emailAddress.address
+        );
+
+        // Procesar si es XML directo o extraer de ZIP
+        const processResult = attachment.name.endsWith('.zip')
+          ? await this.processZipAttachment(attachment)
+          : await this.processDirectAttachment(attachment);
+
+        results.push({
+          filename: attachment.name,
+          storageUrl,
+          processingResult: processResult
+        });
+      }
+    }
+
     return {
-      document: {
-        id: invoice.documentType || '1', // Factura de venta
-      },
-      date: invoice.issueDate.toISOString().split('T')[0],
-      customer: {
-        identification: invoice.customerTaxId,
-        branch_office: '0',
-      },
-      seller: invoice.sellerId,
-      observations: invoice.notes,
-      items: invoice.lineItems.map(item => ({
-        code: item.productCode,
-        description: item.description,
-        quantity: item.quantity,
-        price: item.unitPrice,
-        discount: item.discount || 0,
-        taxes: item.taxes.map(tax => ({
-          id: tax.id,
-          value: tax.rate * 100 // Siigo espera porcentaje
-        }))
-      })),
-      payments: [{
-        id: invoice.paymentMethodId || '1',
-        value: invoice.totalAmount,
-        due_date: invoice.dueDate?.toISOString().split('T')[0]
-      }]
+      emailId: message.id,
+      subject: message.subject,
+      from: message.from.emailAddress.address,
+      processedAttachments: results,
+      processedAt: new Date()
     };
+  }
+
+  private buildInvoiceSearchQuery(): string {
+    return [
+      'hasAttachments:true',
+      '(subject:factura OR subject:invoice OR subject:comprobante)',
+      '(attachment:xml OR attachment:zip OR attachment:pdf)',
+      'received:>= 7 days ago'
+    ].join(' AND ');
+  }
+
+  private async saveToSupabaseStorage(
+    content: Buffer,
+    filename: string,
+    senderEmail: string
+  ): Promise<string> {
+    // Implementación de guardado en Supabase Storage
+    // Organizar por empresa y fecha
+    const path = `invoices/${senderEmail}/${new Date().toISOString().split('T')[0]}/${filename}`;
+    
+    // Esta función será implementada en el módulo de storage
+    return await this.supabaseStorage.upload(path, content);
   }
 }
 ```
@@ -696,11 +729,11 @@ interface PerformanceOptimizations {
     apiCache: APICacheConfig    // External API responses
   }
 
-  // Procesamiento asíncrono
+  // Procesamiento asíncrono (Vercel compatible)
   backgroundJobs: {
-    queue: 'BullMQ'            // Job processing
-    workers: WorkerConfig      // Processing workers
-    scaling: AutoScalingConfig // Dynamic scaling
+    queue: 'Vercel Queue'      // Vercel-native queuing
+    workers: 'Vercel Functions' // Edge-compatible workers
+    scaling: 'Vercel Auto-scaling' // Native scaling
   }
 
   // Optimización de base de datos

@@ -13,32 +13,36 @@ Este comando inicializa el contexto completo del proyecto CFO SaaS Platform para
 
 ### Información General
 - **Nombre:** Plataforma SaaS de Asistencia Financiera y Automatización Contable para PYMES
-- **Objetivo:** Democratizar herramientas financieras avanzadas mediante IA para PYMES en LATAM
+- **Objetivo:** Democratizar herramientas financieras avanzadas mediante IA para PYMES en Colombia
 - **Stack Base:** Next.js 15 + React 19 + Supabase + TypeScript + Tailwind CSS
-- **Repositorio:** NextJS SaaS Starter Kit Lite (Makerkit)
+- **Repositorio:** NextJS SaaS Starter Kit Lite (Makerkit) - Monorepo
+- **Plataforma:** Vercel (deployment y hosting)
+- **País:** Colombia únicamente
 
 ### Problemas que Resuelve
 1. **Falta de asesoría estratégica financiera** → AI CFO virtual
 2. **Procesos contables manuales y propensos a errores** → Automatización inteligente
 
 ### Funcionalidades Core
-- **Procesamiento automatizado de facturas** (XML, PDF, ZIP por email)
-- **AI CFO** para análisis financiero y recomendaciones estratégicas  
-- **Motor tributario** multi-país con cálculo automático de impuestos
-- **Integraciones** con sistemas contables (Siigo, SAP, etc.)
-- **Dashboard financiero** con KPIs y alertas inteligentes
+- **Procesamiento automatizado de facturas** (XML, PDF, ZIP desde O365/Outlook)
+- **AI CFO Virtual Experto** - 15+ años experiencia en Colombia
+- **Motor tributario Colombia** con cálculo automático de impuestos
+- **Almacenamiento inteligente** en Supabase Storage
+- **Dashboard financiero** con KPIs específicos Colombia y alertas AI
 
 ## Arquitectura del Sistema
 
-### Stack Tecnológico
+### Stack Tecnológico - Optimizado para Vercel
 ```typescript
 interface TechStack {
-  frontend: "Next.js 15 + React 19 + TypeScript 5.8"
+  frontend: "Next.js 15 + React 19 + TypeScript 5.8" // App Router
   ui: "Tailwind CSS 4.1 + shadcn/ui + Lucide Icons"
-  backend: "Supabase (PostgreSQL + Auth + Storage + Edge Functions)"
-  ai: "OpenAI GPT-4 Turbo + Azure Cognitive Services"
-  deployment: "Vercel + Supabase Cloud"
+  backend: "Supabase (PostgreSQL + Auth + Storage + RLS)"
+  ai: "OpenAI GPT-4 Turbo (CFO experto) + OpenAI Vision (OCR)"
+  email: "Microsoft Graph API (O365/Outlook)"
+  deployment: "Vercel (Edge Functions + Serverless)"
   monitoring: "Sentry + Vercel Analytics"
+  monorepo: "Makerkit structure (apps/packages)"
 }
 ```
 
@@ -87,17 +91,17 @@ modules/
 - [ ] Documentación completa
 - [ ] Deploy a producción
 
-### Fase 2: AI CFO y Integraciones (6 meses)
-- AI CFO con ChatGPT integration
-- OCR para facturas PDF  
-- APIs para sistemas contables
-- Análisis sectorial automático
+### Fase 2: AI CFO Avanzado (6 meses)
+- AI CFO experto con contexto profundo empresa
+- OCR para facturas PDF con OpenAI Vision
+- Análisis sectorial automático Colombia
+- Alertas proactivas y recomendaciones inteligentes
 
-### Fase 3: Escalamiento Regional (12 meses)
-- Soporte multi-país (Ecuador, Venezuela)
-- Mobile app
+### Fase 3: Optimización Colombia (12 meses)
+- Integraciones con bancos colombianos
+- Mobile app (React Native)
 - Analytics avanzado con ML
-- Marketplace de extensiones
+- Integraciones sistemas contables colombianos
 
 ## Base de Datos
 
@@ -164,28 +168,31 @@ try {
 }
 ```
 
-## Integraciones Clave
+## Integraciones Core (MVP)
 
-### Sistemas Contables
-- **Siigo:** Conector principal para Colombia
-- **SAP Business One:** Enterprise clients  
-- **World Office:** Mercado medio
-- **Generic REST API:** Otros sistemas
+### Microsoft Graph API (O365/Outlook)
+- **OAuth 2.0 + PKCE:** Autenticación sin secretos
+- **Email Processing:** Lectura automática de emails con facturas
+- **ZIP Extraction:** Descompresión automática de archivos
+- **Vercel Compatible:** Edge Functions optimizado
 
-### Servicios de IA
-- **OpenAI GPT-4 Turbo:** AI CFO chatbot y análisis
-- **Azure Computer Vision:** OCR para PDFs
-- **Custom ML Models:** Clasificación PUC
+### OpenAI API 
+- **GPT-4 Turbo:** CFO virtual experto (15+ años experiencia)
+- **GPT-4 Vision:** OCR para facturas PDF/imágenes
+- **Embeddings:** Búsqueda semántica en documentos
+- **Rate Limiting:** Control de costos y uso
 
-### Email y Documentos  
-- **Gmail/Google Workspace:** Lectura de emails con facturas
-- **Microsoft Outlook:** Alternative email provider
-- **Supabase Storage:** Almacenamiento de archivos
+### Supabase Storage
+- **Document Storage:** Almacenamiento seguro de facturas
+- **RLS Policies:** Aislamiento multi-tenant
+- **File Organization:** Estructura por empresa/fecha
+- **CDN Integration:** Acceso rápido a documentos
 
-### Gobierno e Instituciones
-- **DIAN Colombia:** Validación de RUT/NIT
-- **Cámara de Comercio:** Benchmarks sectoriales
-- **Bancos (Open Banking):** Conciliación automática
+### Futuras Integraciones (Post-MVP)
+- Sistemas contables colombianos
+- Bancos colombianos (Open Banking)
+- DIAN (validaciones y consultas)
+- Superintendencia de Sociedades
 
 ## Testing Strategy
 
@@ -209,15 +216,20 @@ NEXT_PUBLIC_SUPABASE_URL=https://ruqxximzgwkdxsskbflg.supabase.co
 NEXT_PUBLIC_SUPABASE_ANON_KEY=your_anon_key
 SUPABASE_SERVICE_ROLE_KEY=your_service_role_key
 
-# OpenAI  
+# OpenAI (CFO Virtual)  
 OPENAI_API_KEY=your_openai_key
+OPENAI_ORG_ID=your_org_id
 
-# Siigo Integration
-SIIGO_USERNAME=your_username
-SIIGO_ACCESS_KEY=your_access_key
+# Microsoft Graph API (O365)
+MICROSOFT_CLIENT_ID=your_client_id
+MICROSOFT_TENANT_ID=common
+MICROSOFT_REDIRECT_URI=https://localhost:3000/auth/microsoft/callback
 
 # Site URL
 NEXT_PUBLIC_SITE_URL=http://localhost:3000
+
+# Vercel
+VERCEL_ENV=development
 ```
 
 ### Configuración en Supabase
@@ -269,22 +281,25 @@ pnpm test:coverage
 
 ## Flujos Críticos
 
-### 1. Procesamiento de Factura por Email
+### 1. Procesamiento de Factura desde O365
 ```
-Email con ZIP → Extracción → Parse XML → Clasificación PUC → 
-Cálculo Impuestos → Validación → Storage → Notificación
-```
-
-### 2. AI CFO Query
-```
-User Query → Context Assembly → GPT-4 Processing → 
-Structured Response → UI Rendering → Feedback Loop
+O365 Email → Microsoft Graph API → ZIP Extraction → XML Parse → 
+Classificación PUC Colombia → Cálculo Impuestos CO → Supabase Storage → 
+AI CFO Analysis → User Notification
 ```
 
-### 3. Exportación a Sistema Contable
+### 2. AI CFO Expert Consultation
 ```
-Facturas Validadas → Format Transformation → API Call → 
-Status Tracking → Error Handling → User Notification
+User Query → Company Context + Historical Data → Colombian Tax Context →
+GPT-4 Expert Processing → Strategic Recommendations → Action Items →
+UI Rendering → Follow-up Suggestions
+```
+
+### 3. Document Storage y Retrieval
+```
+Processed Invoice → Supabase Storage Upload → Metadata Indexing →
+RLS Security Application → CDN Distribution → Fast Retrieval →
+Export to Standard Formats (CSV, Excel, JSON)
 ```
 
 ## Métricas de Éxito
@@ -312,12 +327,12 @@ Status Tracking → Error Handling → User Notification
 - ✅ Theme system (dark/light)
 
 ### Qué necesitamos agregar
-- [ ] Módulos de dominio específicos
-- [ ] Esquemas de base de datos
-- [ ] Procesamiento de archivos
-- [ ] Integraciones con IA
-- [ ] Sistema de facturación
-- [ ] Conectores externos
+- [ ] Módulos de dominio específicos (invoices, ai-cfo, tax-engine)
+- [ ] Esquemas de base de datos Colombia
+- [ ] Procesamiento de archivos XML/PDF/ZIP
+- [ ] Microsoft Graph API integration
+- [ ] OpenAI CFO expert system
+- [ ] Supabase Storage file management
 
 ## Próximos Pasos
 
@@ -345,4 +360,4 @@ Al ejecutar `/init`, Claude Code carga automáticamente:
 - ✅ Esquemas de base de datos
 - ✅ Esta guía de inicialización
 
-**Estado actual:** Repositorio base configurado, Supabase conectado, listo para comenzar desarrollo del MVP.
+**Estado actual:** Repositorio base configurado, Supabase conectado con variables de producción, listo para comenzar desarrollo del MVP enfocado en Colombia con stack Vercel + Supabase + OpenAI + Microsoft Graph.

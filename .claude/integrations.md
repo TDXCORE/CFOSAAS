@@ -1,109 +1,128 @@
-# Integraciones - CFO SaaS Platform
+# Integraciones - CFO SaaS Platform (Colombia)
 
 ## Arquitectura de Integraciones
 
-### Enfoque de Integración
+### Enfoque de Integración - MVP Simplificado
 ```typescript
 interface IntegrationArchitecture {
   // Patrón de conectores
-  pattern: 'Adapter Pattern' | 'Plugin Architecture'
+  pattern: 'Adapter Pattern' // Arquitectura simple y extensible
   
-  // Tipos de integración
+  // Tipos de integración (MVP)
   types: {
-    accounting: 'Sistemas contables (Siigo, SAP, etc.)'
-    banking: 'Bancos (APIs de Open Banking)'
-    government: 'Entidades gubernamentales (DIAN, Cámara)'
-    email: 'Proveedores de email (Gmail, Outlook)'
-    ai: 'Servicios de IA (OpenAI, Azure Cognitive)'
+    email: 'Microsoft Graph API (O365/Outlook)' // Único proveedor
+    storage: 'Supabase Storage' // Almacenamiento de documentos
+    ai: 'OpenAI API' // CFO virtual y análisis
+    // Nota: Sin integraciones contables o gubernamentales en MVP
   }
 
   // Protocolos soportados
-  protocols: ['REST API', 'SOAP', 'GraphQL', 'Webhooks', 'SFTP', 'Email IMAP/POP3']
+  protocols: ['REST API', 'Microsoft Graph API']
   
   // Autenticación
-  auth: ['OAuth 2.0', 'API Keys', 'JWT', 'Basic Auth', 'Certificate-based']
+  auth: ['OAuth 2.0 + PKCE', 'API Keys']
+  
+  // Compatibilidad
+  compatibility: {
+    platform: 'Vercel Edge Functions'
+    runtime: 'Node.js Edge Runtime'
+    database: 'Supabase PostgreSQL'
+  }
 }
 ```
 
-## 1. Integraciones con Sistemas Contables
+## 1. Integración Principal: Microsoft Graph API (O365)
 
-### Siigo - Conector Principal
+### Conector O365/Outlook
 ```typescript
-interface SiigoIntegration {
-  baseURL: 'https://api.siigo.com/v1'
-  authentication: 'Custom Token-based'
+interface O365Integration {
+  baseURL: 'https://graph.microsoft.com/v1.0'
+  authentication: 'OAuth 2.0 + PKCE'
   
   endpoints: {
-    auth: '/auth'
-    customers: '/customers'
-    products: '/products'
-    invoices: '/invoices'
-    accounts: '/account-groups'
-    taxes: '/taxes'
+    messages: '/me/messages'
+    attachments: '/me/messages/{id}/attachments'
+    mailboxSettings: '/me/mailboxSettings'
   }
   
   capabilities: {
-    createInvoice: boolean        // true
-    updateInvoice: boolean        // false - Siigo no permite
-    getChartOfAccounts: boolean   // true
-    syncCustomers: boolean        // true
-    validateTaxes: boolean        // true
-    webhookSupport: boolean       // false
+    readEmails: boolean          // true
+    downloadAttachments: boolean // true
+    searchEmails: boolean        // true
+    markAsProcessed: boolean     // true
+    createFolders: boolean       // true
+    webhookSupport: boolean      // true (change notifications)
+  }
+  
+  vercelCompatibility: {
+    edgeFunctions: boolean       // true
+    serverlessRuntime: boolean   // true
+    coldStarts: 'Optimized'     // Fast initialization
   }
 }
 
-// Implementación del conector Siigo
-class SiigoConnector implements AccountingConnector {
+// Implementación del conector Microsoft Graph
+class O365OutlookConnector implements EmailConnector {
   private client: SiigoAPIClient;
   private rateLimiter: RateLimiter;
 
-  constructor(credentials: SiigoCredentials) {
-    this.client = new SiigoAPIClient(credentials);
+  constructor(credentials: MicrosoftGraphCredentials) {
+    this.client = new GraphAPIClient(credentials);
     this.rateLimiter = new RateLimiter({
-      tokensPerInterval: 100,
+      tokensPerInterval: 2000, // Microsoft Graph limits
       interval: 'minute'
     });
   }
 
-  async exportInvoices(invoices: ProcessedInvoice[]): Promise<ExportResult[]> {
-    const results: ExportResult[] = [];
+  async processInvoiceEmails(): Promise<EmailProcessingResult[]> {
+    const results: EmailProcessingResult[] = [];
     
-    for (const invoice of invoices) {
-      await this.rateLimiter.removeTokens(1);
+    try {
+      // Search for emails with invoice attachments
+      const messages = await this.searchInvoiceEmails();
       
-      try {
-        // Transform to Siigo format
-        const siigoInvoice = await this.transformToSiigoFormat(invoice);
+      for (const message of messages) {
+        await this.rateLimiter.removeTokens(1);
         
-        // Validate before sending
-        const validation = await this.validateInvoice(siigoInvoice);
-        if (!validation.isValid) {
-          throw new ValidationError(validation.errors);
+        try {
+          // Download attachments
+          const attachments = await this.downloadAttachments(message.id);
+          
+          // Process each attachment
+          const processedAttachments = [];
+          for (const attachment of attachments) {
+            if (this.isInvoiceFile(attachment)) {
+              const processed = await this.processAttachment(attachment, message);
+              processedAttachments.push(processed);
+            }
+          }
+          
+          results.push({
+            messageId: message.id,
+            subject: message.subject,
+            from: message.from.emailAddress.address,
+            attachments: processedAttachments,
+            status: 'success',
+            processedAt: new Date()
+          });
+          
+          // Mark as processed
+          await this.markEmailAsProcessed(message.id);
+          
+        } catch (error) {
+          console.error(`Failed to process email ${message.id}:`, error);
+          
+          results.push({
+            messageId: message.id,
+            status: 'error',
+            error: error.message,
+            retryable: this.isRetryableError(error)
+          });
         }
-        
-        // Send to Siigo
-        const response = await this.client.createInvoice(siigoInvoice);
-        
-        results.push({
-          originalId: invoice.id,
-          externalId: response.id,
-          status: 'success',
-          exportedAt: new Date()
-        });
-        
-        // Update internal status
-        await this.updateInvoiceStatus(invoice.id, 'exported', response.id);
-        
-      } catch (error) {
-        console.error(`Failed to export invoice ${invoice.id}:`, error);
-        
-        results.push({
-          originalId: invoice.id,
-          status: 'error',
-          error: error.message,
-          retryable: this.isRetryableError(error)
-        });
       }
+    } catch (error) {
+      console.error('Failed to search emails:', error);
+      throw new EmailProcessingError('Email search failed', error);
     }
     
     return results;
@@ -248,23 +267,32 @@ class SiigoAPIClient {
 }
 ```
 
-### SAP Business One Integration
+### Supabase Storage Integration
 ```typescript
-interface SAPBusinessOneIntegration {
-  connection: 'SAP Business One DI API' | 'Service Layer REST API'
+interface SupabaseStorageIntegration {
+  connection: 'Supabase Storage API'
   
   capabilities: {
-    createBusinessPartner: boolean    // true
-    createItem: boolean              // true
-    createInvoice: boolean           // true
-    getChartOfAccounts: boolean      // true
-    postJournalEntry: boolean        // true
-    syncMasterData: boolean          // true
+    uploadFiles: boolean             // true
+    downloadFiles: boolean           // true
+    createBuckets: boolean          // true
+    fileMetadata: boolean           // true
+    publicUrls: boolean             // true
+    securityPolicies: boolean       // true (RLS)
+  }
+  
+  organization: {
+    structure: 'company_id/year/month/filename'
+    buckets: {
+      invoices: 'invoice-documents'
+      processed: 'processed-files'
+      exports: 'export-files'
+    }
   }
 }
 
-// SAP Connector usando Service Layer
-class SAPBusinessOneConnector implements AccountingConnector {
+// Supabase Storage Connector
+class SupabaseStorageConnector implements StorageConnector {
   private serviceLayerURL: string;
   private sessionId: string | null = null;
 
@@ -339,34 +367,34 @@ class SAPBusinessOneConnector implements AccountingConnector {
 }
 ```
 
-## 2. Integraciones Bancarias
+## 2. Integración con OpenAI
 
-### Open Banking Colombia
+### OpenAI API para CFO Virtual
 ```typescript
-interface OpenBankingIntegration {
-  // Bancos soportados
-  supportedBanks: {
-    bancolombia: BancolombiaConnector
-    davivienda: DaviviendaConnector
-    banco_bogota: BancoBogotaConnector
-    bbva: BBVAConnector
+interface OpenAIIntegration {
+  // Modelos soportados
+  models: {
+    chatbot: 'gpt-4-turbo' // CFO virtual
+    analysis: 'gpt-4-turbo' // Análisis financiero
+    vision: 'gpt-4-vision-preview' // OCR para PDFs
+    embedding: 'text-embedding-3-small' // Búsqueda semántica
   }
 
   // Funcionalidades
   capabilities: {
-    getAccountBalance: boolean       // true
-    getTransactions: boolean         // true
-    categorizeTransactions: boolean  // true (con IA)
-    reconcileInvoices: boolean      // true
-    cashFlowPrediction: boolean     // true (con ML)
+    financialAdvice: boolean         // true - Consultas CFO
+    documentAnalysis: boolean        // true - Análisis de facturas
+    insightGeneration: boolean       // true - Insights automáticos
+    reportGeneration: boolean        // true - Reportes inteligentes
+    conversationalChat: boolean      // true - Chat contextual
   }
 
-  // Seguridad
-  security: {
-    oauth2: 'PKCE flow'
-    encryption: 'TLS 1.3'
-    tokenStorage: 'Encrypted in Supabase'
-    consent: 'Explicit user consent required'
+  // Configuración Vercel
+  vercelOptimization: {
+    edgeCompatible: boolean          // true
+    streaming: boolean               // true - Respuestas en tiempo real
+    rateLimiting: boolean           // true - Control de costos
+    caching: boolean                // true - Cache de respuestas
   }
 }
 
@@ -506,22 +534,33 @@ class BancolombiaConnector extends BankConnector {
 }
 ```
 
-## 3. Integraciones Gubernamentales
+## 3. Sistema de Archivos y Documentos
 
-### DIAN (Colombia) Integration
+### Procesamiento de Documentos
 ```typescript
-interface DIANIntegration {
-  services: {
-    validateTaxId: 'RUT validation'
-    getCompanyInfo: 'Company information lookup'
-    validateInvoice: 'Electronic invoice validation'
-    getTaxObligations: 'Tax obligations lookup'
-    submitReports: 'Tax report submission (future)'
+interface DocumentProcessingSystem {
+  // Tipos de documentos soportados
+  supportedFormats: {
+    xml: 'Facturas electrónicas UBL 2.1'
+    pdf: 'Facturas escaneadas (OCR con OpenAI Vision)'
+    zip: 'Archivos comprimidos con múltiples facturas'
   }
 
-  endpoints: {
-    production: 'https://muisca.dian.gov.co'
-    sandbox: 'https://catalogo-vpfe-hab.dian.gov.co'
+  // Pipeline de procesamiento
+  pipeline: {
+    extraction: 'Extracción de datos estructurados'
+    validation: 'Validación de esquemas XML/UBL'
+    classification: 'Clasificación PUC automática'
+    storage: 'Almacenamiento en Supabase Storage'
+    indexing: 'Indexación para búsqueda'
+  }
+
+  // Compatibilidad Vercel
+  vercelFeatures: {
+    edgeFunctions: boolean           // true
+    fileUploads: boolean            // true (con middleware)
+    largeFiles: boolean             // true (hasta 100MB)
+    streaming: boolean              // true (procesamiento en tiempo real)
   }
 }
 
@@ -595,7 +634,7 @@ class DIANConnector {
 }
 ```
 
-### Cámara de Comercio Integration
+### Sistema de Notificaciones
 ```typescript
 interface CamaraComercioIntegration {
   services: {
@@ -647,25 +686,29 @@ class CamaraComercioConnector {
 }
 ```
 
-## 4. Integraciones de Email
+## 4. Detalles de Implementación Microsoft Graph
 
-### Gmail/Google Workspace Integration
+### Configuración OAuth 2.0 + PKCE
 ```typescript
-interface GmailIntegration {
-  auth: 'OAuth 2.0 with Gmail API'
-  scopes: ['gmail.readonly', 'gmail.modify']
+interface MicrosoftGraphOAuth {
+  auth: 'OAuth 2.0 with PKCE (RFC 7636)'
+  scopes: ['Mail.Read', 'Mail.ReadWrite', 'Files.ReadWrite']
   
-  capabilities: {
-    readEmails: boolean           // true
-    searchEmails: boolean         // true
-    downloadAttachments: boolean  // true
-    markAsProcessed: boolean      // true
-    createLabels: boolean         // true
-    moveToFolder: boolean         // true
+  endpoints: {
+    authorization: 'https://login.microsoftonline.com/common/oauth2/v2.0/authorize'
+    token: 'https://login.microsoftonline.com/common/oauth2/v2.0/token'
+    graph: 'https://graph.microsoft.com/v1.0'
+  }
+  
+  vercelImplementation: {
+    authFlow: 'Serverless OAuth handler'
+    tokenStorage: 'Encrypted in Supabase'
+    refreshTokens: 'Automatic refresh with Edge Functions'
+    errorHandling: 'Graceful degradation'
   }
 }
 
-class GmailConnector implements EmailConnector {
+class MicrosoftGraphConnector implements EmailConnector {
   private gmail: gmail_v1.Gmail;
 
   constructor(private credentials: OAuth2Credentials) {
@@ -876,22 +919,46 @@ class OutlookConnector implements EmailConnector {
 }
 ```
 
-## 5. Integraciones de IA
+## 5. OpenAI CFO Virtual - Implementación Completa
 
-### OpenAI Integration
+### CFO Expert System
 ```typescript
-interface OpenAIIntegration {
-  models: {
-    chat: 'gpt-4-turbo-preview'
-    embedding: 'text-embedding-3-small'
-    vision: 'gpt-4-vision-preview'
+interface OpenAICFOSystem {
+  // Sistema experto CFO
+  expertSystem: {
+    role: 'Senior CFO with 15+ years experience in Colombia'
+    specialization: [
+      'PYMES financial management',
+      'Colombian tax optimization',
+      'Cash flow management', 
+      'NIIF compliance',
+      'Sectoral benchmarking'
+    ]
+    models: {
+      conversation: 'gpt-4-turbo' // Conversaciones principales
+      analysis: 'gpt-4-turbo'    // Análisis profundo
+      vision: 'gpt-4-vision-preview' // Análisis de documentos
+      embedding: 'text-embedding-3-small' // Búsqueda contextual
+    }
   }
   
-  usage: {
-    aiCFOChat: 'Financial advice and analysis'
-    documentAnalysis: 'Invoice and document understanding'
-    dataInsights: 'Pattern recognition in financial data'
-    reportGeneration: 'Automated report creation'
+  // Capacidades específicas
+  capabilities: {
+    strategicAdvice: 'Recomendaciones estratégicas personalizadas'
+    riskAnalysis: 'Identificación proactiva de riesgos financieros'
+    opportunityDetection: 'Detección de oportunidades de optimización'
+    complianceGuidance: 'Guía normativa colombiana'
+    sectoralBenchmarking: 'Comparación con estándares sectoriales'
+    cashFlowForecasting: 'Proyecciones de flujo de caja'
+  }
+  
+  // Optimización Vercel
+  vercelOptimizations: {
+    streaming: boolean              // true - Respuestas en tiempo real
+    edgeDeployment: boolean         // true - Baja latencia
+    contextCaching: boolean         // true - Reducir costos
+    rateLimiting: boolean          // true - Control de uso por empresa
+    errorHandling: boolean         // true - Fallbacks inteligentes
   }
 }
 
@@ -1068,26 +1135,45 @@ class AzureOCRService {
 }
 ```
 
-## 6. Gestión de Integraciones
+## 6. Gestión Simplificada de Integraciones
 
-### Integration Manager
+### Integration Manager (MVP)
 ```typescript
 class IntegrationManager {
-  private connectors = new Map<string, any>();
+  private connectors = {
+    email: null as O365OutlookConnector | null,
+    storage: null as SupabaseStorageConnector | null,
+    ai: null as OpenAICFOConnector | null
+  };
   private healthChecker: IntegrationHealthChecker;
 
   constructor() {
-    this.healthChecker = new IntegrationHealthChecker(this.connectors);
+    this.healthChecker = new IntegrationHealthChecker();
     this.setupHealthChecking();
+    this.initializeConnectors();
   }
 
-  async registerConnector(name: string, connector: any): Promise<void> {
-    this.connectors.set(name, connector);
-    
-    // Test connection
-    const isHealthy = await this.testConnectorHealth(name);
-    if (!isHealthy) {
-      console.warn(`Connector ${name} failed health check during registration`);
+  private async initializeConnectors(): Promise<void> {
+    // Initialize only the three core connectors
+    try {
+      this.connectors.email = new O365OutlookConnector({
+        clientId: process.env.MICROSOFT_CLIENT_ID!,
+        tenantId: process.env.MICROSOFT_TENANT_ID!,
+        // PKCE - No client secret needed
+      });
+      
+      this.connectors.storage = new SupabaseStorageConnector({
+        url: process.env.NEXT_PUBLIC_SUPABASE_URL!,
+        serviceKey: process.env.SUPABASE_SERVICE_ROLE_KEY!
+      });
+      
+      this.connectors.ai = new OpenAICFOConnector({
+        apiKey: process.env.OPENAI_API_KEY!
+      });
+      
+      console.log('All integrations initialized successfully');
+    } catch (error) {
+      console.error('Failed to initialize integrations:', error);
     }
   }
 
@@ -1168,22 +1254,21 @@ class IntegrationManager {
 }
 ```
 
-## 7. Configuración y Deployment
+## 7. Configuración y Deployment en Vercel
 
-### Environment Configuration
+### Environment Configuration (MVP)
 ```typescript
 // config/integrations.config.ts
 export const IntegrationsConfig = {
-  siigo: {
-    enabled: process.env.SIIGO_INTEGRATION_ENABLED === 'true',
-    credentials: {
-      username: process.env.SIIGO_USERNAME!,
-      accessKey: process.env.SIIGO_ACCESS_KEY!
-    },
-    baseURL: process.env.SIIGO_API_URL || 'https://api.siigo.com/v1',
+  microsoft: {
+    enabled: process.env.MICROSOFT_INTEGRATION_ENABLED === 'true',
+    clientId: process.env.MICROSOFT_CLIENT_ID!,
+    tenantId: process.env.MICROSOFT_TENANT_ID!, // 'common' para multi-tenant
+    scopes: ['Mail.Read', 'Mail.ReadWrite', 'Files.ReadWrite'],
+    redirectUri: process.env.MICROSOFT_REDIRECT_URI!,
     rateLimits: {
-      requestsPerMinute: 60,
-      requestsPerHour: 1000
+      requestsPerSecond: 10,
+      requestsPerMinute: 2000
     }
   },
   
@@ -1192,56 +1277,99 @@ export const IntegrationsConfig = {
     apiKey: process.env.OPENAI_API_KEY!,
     organization: process.env.OPENAI_ORG_ID,
     rateLimits: {
-      tokensPerMinute: 10000,
-      requestsPerMinute: 500
+      tokensPerMinute: 50000, // Sufficient for CFO usage
+      requestsPerMinute: 500,
+      maxTokensPerRequest: 4096
+    },
+    models: {
+      cfo: 'gpt-4-turbo',
+      vision: 'gpt-4-vision-preview',
+      embedding: 'text-embedding-3-small'
     }
   },
   
-  gmail: {
-    enabled: process.env.GMAIL_INTEGRATION_ENABLED === 'true',
-    clientId: process.env.GOOGLE_CLIENT_ID!,
-    clientSecret: process.env.GOOGLE_CLIENT_SECRET!,
-    scopes: ['gmail.readonly', 'gmail.modify']
+  supabase: {
+    url: process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    anonKey: process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    serviceRoleKey: process.env.SUPABASE_SERVICE_ROLE_KEY!,
+    storage: {
+      buckets: {
+        invoices: 'invoice-documents',
+        processed: 'processed-files',
+        exports: 'export-files'
+      },
+      maxFileSize: 100 * 1024 * 1024, // 100MB
+      allowedTypes: ['.xml', '.pdf', '.zip']
+    }
   },
   
-  dian: {
-    enabled: process.env.DIAN_INTEGRATION_ENABLED === 'true',
-    baseURL: process.env.NODE_ENV === 'production' 
-      ? 'https://muisca.dian.gov.co'
-      : 'https://catalogo-vpfe-hab.dian.gov.co'
+  vercel: {
+    deployment: {
+      functions: {
+        timeout: 60, // 60 seconds for processing
+        memory: 1024 // 1GB for large file processing
+      },
+      edge: {
+        regions: ['iad1', 'cle1'], // US East for better latency to Colombia
+        runtime: 'edge'
+      }
+    }
   }
 } as const;
 ```
 
 ### Testing Integrations
 ```typescript
-// __tests__/integrations/siigo.integration.test.ts
-describe('Siigo Integration', () => {
-  let siigoConnector: SiigoConnector;
+// __tests__/integrations/microsoft-graph.integration.test.ts
+describe('Microsoft Graph Integration', () => {
+  let graphConnector: O365OutlookConnector;
   
   beforeAll(() => {
-    siigoConnector = new SiigoConnector({
-      username: process.env.SIIGO_TEST_USERNAME!,
-      accessKey: process.env.SIIGO_TEST_ACCESS_KEY!
+    graphConnector = new O365OutlookConnector({
+      clientId: process.env.MICROSOFT_CLIENT_ID!,
+      tenantId: process.env.MICROSOFT_TENANT_ID!
     });
   });
 
-  it('should authenticate successfully', async () => {
-    const isAuthenticated = await siigoConnector.testConnection();
-    expect(isAuthenticated).toBe(true);
+  it('should search for invoice emails', async () => {
+    const emails = await graphConnector.searchInvoiceEmails();
+    expect(emails).toBeInstanceOf(Array);
+    expect(emails.length).toBeGreaterThanOrEqual(0);
   });
 
-  it('should export invoice successfully', async () => {
-    const testInvoice = createTestInvoice();
-    const result = await siigoConnector.exportInvoices([testInvoice]);
+  it('should process email attachments', async () => {
+    const mockEmail = createMockEmailWithAttachment();
+    const result = await graphConnector.processEmailAttachments(mockEmail);
     
-    expect(result).toHaveLength(1);
-    expect(result[0].status).toBe('success');
-    expect(result[0].externalId).toBeDefined();
+    expect(result).toHaveProperty('messageId');
+    expect(result).toHaveProperty('attachments');
+    expect(result.status).toBe('success');
+  });
+});
+
+// __tests__/integrations/openai-cfo.integration.test.ts
+describe('OpenAI CFO Integration', () => {
+  let cfoConnector: OpenAICFOConnector;
+  
+  beforeAll(() => {
+    cfoConnector = new OpenAICFOConnector({
+      apiKey: process.env.OPENAI_API_KEY!
+    });
+  });
+
+  it('should provide financial advice', async () => {
+    const query = '¿Cómo puedo mejorar mi flujo de caja?';
+    const companyData = createMockCompanyData();
+    
+    const advice = await cfoConnector.getFinancialAdvice(query, companyData);
+    
+    expect(advice).toHaveProperty('recommendations');
+    expect(advice).toHaveProperty('reasoning');
+    expect(advice.confidence).toBeGreaterThan(0.7);
   });
 });
 ```
 
 ---
 
-Esta especificación de integraciones proporciona una base sólida para conectar la plataforma CFO SaaS con los sistemas externos necesarios, manteniendo flexibilidad para agregar nuevas integraciones en el futuro.
+Esta especificación de integraciones MVP proporciona una base sólida y simple para la plataforma CFO SaaS, enfocada en las tres integraciones core necesarias: Microsoft Graph (O365), Supabase Storage, y OpenAI. La arquitectura está optimizada para Vercel y permite escalabilidad futura sin complejidad innecesaria en la versión inicial.

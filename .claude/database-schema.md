@@ -36,10 +36,10 @@ CREATE TABLE companies (
   sector VARCHAR(100), -- 'manufacturing', 'services', 'commerce', etc.
   size ENUM('micro', 'small', 'medium', 'large') DEFAULT 'small',
   
-  -- Ubicación
-  country VARCHAR(2) DEFAULT 'CO',
-  state VARCHAR(100),
-  city VARCHAR(100),
+  -- Ubicación Colombia
+  country VARCHAR(2) DEFAULT 'CO', -- Siempre Colombia
+  department VARCHAR(100), -- Departamento Colombia
+  city VARCHAR(100), -- Ciudad Colombia
   address JSONB,
   
   -- Configuraciones
@@ -58,11 +58,11 @@ CREATE TABLE companies (
   deleted_at TIMESTAMP NULL
 );
 
--- Índices para optimización
+-- Índices para optimización Colombia
 CREATE INDEX idx_companies_tax_id ON companies(tax_id);
 CREATE INDEX idx_companies_sector ON companies(sector);
 CREATE INDEX idx_companies_subscription ON companies(subscription_plan, subscription_status);
-CREATE INDEX idx_companies_country ON companies(country);
+CREATE INDEX idx_companies_department_city ON companies(department, city);
 
 -- Trigger para updated_at
 CREATE OR REPLACE FUNCTION update_updated_at_column()
@@ -155,9 +155,10 @@ CREATE TABLE invoices (
   
   -- Archivos origen
   source_file_name VARCHAR(255),
-  source_file_type VARCHAR(50), -- 'xml', 'pdf', 'email_attachment'
+  source_file_type VARCHAR(50), -- 'xml', 'pdf', 'zip_attachment'
   source_file_url TEXT, -- URL en Supabase Storage
-  source_email_id VARCHAR(255), -- ID del email origen
+  source_email_id VARCHAR(255), -- ID del email O365/Outlook
+  source_email_sender VARCHAR(255), -- Email del remitente
   
   -- Metadatos de procesamiento
   processing_metadata JSONB DEFAULT '{}', -- Logs, errores, confianza
@@ -166,11 +167,11 @@ CREATE TABLE invoices (
   reviewed_by UUID REFERENCES auth.users(id),
   reviewed_at TIMESTAMP,
   
-  -- Integración externa
-  exported_to VARCHAR(50), -- 'siigo', 'sap', 'worldoffice'
+  -- Exportación (futuro)
+  exported_to VARCHAR(50), -- Para futuras integraciones contables
   external_reference VARCHAR(255), -- ID en sistema externo
   exported_at TIMESTAMP,
-  export_status VARCHAR(50), -- 'pending', 'success', 'failed'
+  export_status VARCHAR(50) DEFAULT 'stored', -- 'stored', 'pending', 'exported', 'failed'
   
   -- Auditoría
   created_at TIMESTAMP DEFAULT NOW(),
@@ -302,14 +303,15 @@ FOR ALL USING (
 
 ## 3. Tax Engine Tables
 
-### tax_rules (Reglas tributarias)
+### tax_rules (Reglas tributarias Colombia)
 ```sql
 CREATE TABLE tax_rules (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   
-  -- Ámbito de aplicación
-  country VARCHAR(2) NOT NULL DEFAULT 'CO',
-  region VARCHAR(100), -- Para reglas municipales/estatales
+  -- Ámbito de aplicación Colombia
+  country VARCHAR(2) NOT NULL DEFAULT 'CO', -- Siempre Colombia
+  department VARCHAR(100), -- Departamento Colombia
+  municipality VARCHAR(100), -- Municipio (para ICA)
   
   -- Tipo de regla
   rule_type VARCHAR(50) NOT NULL, -- 'IVA', 'RETENCION', 'ICA'
@@ -351,9 +353,9 @@ CREATE TABLE tax_rules (
   updated_at TIMESTAMP DEFAULT NOW()
 );
 
--- Índices para búsqueda eficiente de reglas
+-- Índices para búsqueda eficiente de reglas Colombia
 CREATE INDEX idx_tax_rules_type ON tax_rules(rule_type, rule_category);
-CREATE INDEX idx_tax_rules_country ON tax_rules(country, region);
+CREATE INDEX idx_tax_rules_location ON tax_rules(country, department, municipality);
 CREATE INDEX idx_tax_rules_effective ON tax_rules(effective_from, effective_to);
 CREATE INDEX idx_tax_rules_active ON tax_rules(is_active);
 
@@ -602,7 +604,7 @@ CREATE TABLE integration_configs (
   company_id UUID NOT NULL REFERENCES companies(id) ON DELETE CASCADE,
   
   -- Tipo de integración
-  integration_type VARCHAR(50) NOT NULL, -- 'siigo', 'sap', 'gmail', 'outlook'
+  integration_type VARCHAR(50) NOT NULL, -- 'microsoft_graph', 'openai', 'supabase_storage'
   integration_name VARCHAR(100) NOT NULL,
   
   -- Configuración
@@ -924,23 +926,41 @@ GROUP BY c.id, c.name, c.sector;
 -- Este archivo contendría toda la estructura base
 -- Ejecutar en orden: companies -> user_companies -> puc_accounts -> tax_rules -> invoices -> etc.
 
--- Seed data para PUC accounts (Colombia)
+-- Seed data para PUC accounts Colombia (Decreto 2650)
 INSERT INTO puc_accounts (code, name, level, account_type, nature) VALUES
+-- Activos
 ('1', 'ACTIVO', 1, 'asset', 'debit'),
 ('11', 'DISPONIBLE', 2, 'asset', 'debit'),
 ('1105', 'CAJA', 3, 'asset', 'debit'),
 ('1110', 'BANCOS', 3, 'asset', 'debit'),
+('13', 'DEUDORES', 2, 'asset', 'debit'),
+('1305', 'CLIENTES', 3, 'asset', 'debit'),
+-- Ingresos
 ('4', 'INGRESOS', 1, 'income', 'credit'),
 ('41', 'INGRESOS OPERACIONALES', 2, 'income', 'credit'),
 ('4135', 'COMERCIO AL POR MAYOR Y AL POR MENOR', 3, 'income', 'credit'),
+('4175', 'ACTIVIDADES INMOBILIARIAS', 3, 'income', 'credit'),
+('42', 'INGRESOS NO OPERACIONALES', 2, 'income', 'credit'),
+-- Gastos
 ('5', 'GASTOS', 1, 'expense', 'debit'),
-('51', 'GASTOS OPERACIONALES DE ADMINISTRACION', 2, 'expense', 'debit');
+('51', 'GASTOS OPERACIONALES DE ADMINISTRACION', 2, 'expense', 'debit'),
+('5105', 'GASTOS DE PERSONAL', 3, 'expense', 'debit'),
+('52', 'GASTOS OPERACIONALES DE VENTAS', 2, 'expense', 'debit'),
+('53', 'GASTOS NO OPERACIONALES', 2, 'expense', 'debit');
 
--- Seed data para tax rules básicas (Colombia)
-INSERT INTO tax_rules (country, rule_type, calculation_method, tax_rate, conditions, effective_from, description) VALUES
-('CO', 'IVA', 'percentage', 0.1900, '{"general": true}', '2023-01-01', 'IVA General 19%'),
-('CO', 'IVA', 'percentage', 0.0500, '{"puc_codes": ["1511", "1512"]}', '2023-01-01', 'IVA Reducido 5%'),
-('CO', 'RETENCION_FUENTE', 'percentage', 0.1100, '{"service_type": true, "amount_min": 4000000}', '2023-01-01', 'Retención servicios 11%');
+-- Seed data para tax rules Colombia 2025
+INSERT INTO tax_rules (country, rule_type, calculation_method, tax_rate, conditions, effective_from, description, legal_reference) VALUES
+-- IVA Colombia
+('CO', 'IVA', 'percentage', 0.1900, '{"general": true}', '2025-01-01', 'IVA General 19%', 'Ley 1819 de 2016'),
+('CO', 'IVA', 'percentage', 0.0500, '{"puc_codes": ["1511", "1512"], "basic_products": true}', '2025-01-01', 'IVA Reducido 5%', 'Art. 468-1 ET'),
+('CO', 'IVA', 'percentage', 0.0000, '{"exempt_products": true, "puc_codes": ["1100", "1200"]}', '2025-01-01', 'IVA Exento 0%', 'Art. 476 ET'),
+-- Retención en la Fuente
+('CO', 'RETENCION_FUENTE', 'percentage', 0.1100, '{"services": true, "amount_min": 4000000}', '2025-01-01', 'Retención servicios 11%', 'Art. 392 ET'),
+('CO', 'RETENCION_FUENTE', 'percentage', 0.0250, '{"goods": true, "amount_min": 1000000}', '2025-01-01', 'Retención compras 2.5%', 'Art. 392 ET'),
+-- ICA principales ciudades
+('CO', 'ICA', 'percentage', 0.00414, '{"municipality": "Bogotá", "commerce": true}', '2025-01-01', 'ICA Bogotá Comercio 4.14x1000', 'Acuerdo 780 de 2020'),
+('CO', 'ICA', 'percentage', 0.00966, '{"municipality": "Bogotá", "services": true}', '2025-01-01', 'ICA Bogotá Servicios 9.66x1000', 'Acuerdo 780 de 2020'),
+('CO', 'ICA', 'percentage', 0.00700, '{"municipality": "Medellín"}', '2025-01-01', 'ICA Medellín 7x1000', 'Acuerdo Municipal');
 ```
 
 Este esquema de base de datos proporciona una base sólida y escalable para la plataforma CFO SaaS, con todas las características necesarias para multi-tenancy, auditoría completa, y performance optimizado para grandes volúmenes de datos financieros.

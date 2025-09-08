@@ -1,4 +1,4 @@
-# Estrategia de Testing - CFO SaaS Platform
+# Estrategia de Testing - CFO SaaS Platform (Colombia)
 
 ## Filosofía de Testing
 
@@ -804,9 +804,11 @@ jobs:
 ## Métricas de Calidad
 
 ### Coverage Goals por Módulo
-- **Tax Engine:** 90%+ (crítico para compliance)
+- **Tax Engine Colombia:** 90%+ (crítico para compliance)
 - **Invoice Processing:** 85%+ (core business logic)
+- **Microsoft Graph Integration:** 80%+ (crítico para ingesta)
 - **AI CFO:** 70%+ (más difícil de testear, mucho mocking)
+- **Supabase Storage:** 75%+ (manejo de archivos)
 - **UI Components:** 60%+ (focus en lógica, no en rendering)
 - **Utilities:** 95%+ (funciones puras, fáciles de testear)
 
@@ -818,4 +820,4 @@ jobs:
 
 ---
 
-Esta estrategia de testing asegura alta calidad y confiabilidad del código mientras mantiene velocidad de desarrollo y facilita el mantenimiento a largo plazo.
+Esta estrategia de testing MVP asegura alta calidad y confiabilidad del código, enfocada en las integraciones core (Microsoft Graph, OpenAI, Supabase Storage) y optimizada para desarrollo rápido en Vercel mientras mantiene cobertura robusta para compliance tributario colombiano.
