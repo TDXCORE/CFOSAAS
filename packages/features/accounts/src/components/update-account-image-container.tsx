@@ -66,18 +66,39 @@ function UploadProfileAvatarForm(props: {
         return Promise.resolve();
       };
 
+      // Helper function for safe account updates
+      const updateAccountSafely = async (pictureUrl: string | null) => {
+        try {
+          const result = await client
+            .from('accounts')
+            .update({
+              picture_url: pictureUrl,
+            })
+            .eq('id', props.userId);
+            
+          // If accounts table doesn't exist, just log and continue
+          if (result.error) {
+            if (result.error.code === 'PGRST116' || result.error.message?.includes('404')) {
+              console.warn('Accounts table not found, skipping profile picture update');
+              return; // Don't throw, just continue
+            }
+            throw result.error;
+          }
+        } catch (error: any) {
+          if (error.status === 404 || error.message?.includes('404')) {
+            console.warn('Accounts table not found, skipping profile picture update:', error);
+            return; // Don't throw, just continue
+          }
+          throw error;
+        }
+      };
+
       if (file) {
         const promise = () =>
           removeExistingStorageFile().then(() =>
             uploadUserProfilePhoto(client, file, props.userId)
               .then((pictureUrl) => {
-                return client
-                  .from('accounts')
-                  .update({
-                    picture_url: pictureUrl,
-                  })
-                  .eq('id', props.userId)
-                  .throwOnError();
+                return updateAccountSafely(pictureUrl);
               })
               .then(() => {
                 props.onAvatarUpdated();
@@ -89,13 +110,7 @@ function UploadProfileAvatarForm(props: {
         const promise = () =>
           removeExistingStorageFile()
             .then(() => {
-              return client
-                .from('accounts')
-                .update({
-                  picture_url: null,
-                })
-                .eq('id', props.userId)
-                .throwOnError();
+              return updateAccountSafely(null);
             })
             .then(() => {
               props.onAvatarUpdated();

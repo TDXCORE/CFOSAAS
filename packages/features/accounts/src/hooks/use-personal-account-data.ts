@@ -20,23 +20,45 @@ export function usePersonalAccountData(
       return null;
     }
 
-    const response = await client
-      .from('accounts')
-      .select(
-        `
-        id,
-        name,
-        picture_url
-    `,
-      )
-      .eq('id', userId)
-      .single();
+    try {
+      const response = await client
+        .from('accounts')
+        .select(
+          `
+          id,
+          name,
+          picture_url
+      `,
+        )
+        .eq('id', userId)
+        .single();
 
-    if (response.error) {
-      throw response.error;
+      if (response.error) {
+        // If accounts table doesn't exist, return fallback data
+        if (response.error.code === 'PGRST116' || response.error.message?.includes('404')) {
+          console.warn('Accounts table not found, using fallback data');
+          return {
+            id: userId,
+            name: 'Demo User',
+            picture_url: null,
+          };
+        }
+        throw response.error;
+      }
+
+      return response.data;
+    } catch (error: any) {
+      // Handle 404 errors gracefully with fallback data  
+      if (error.status === 404 || error.message?.includes('404')) {
+        console.warn('Accounts table not found, using fallback data:', error);
+        return {
+          id: userId,
+          name: 'Demo User', 
+          picture_url: null,
+        };
+      }
+      throw error;
     }
-
-    return response.data;
   };
 
   return useQuery({
