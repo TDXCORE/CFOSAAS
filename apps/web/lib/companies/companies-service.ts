@@ -3,7 +3,7 @@
  * Handles Colombian company operations with Supabase
  */
 
-import { createBrowserClient } from '@kit/supabase/client';
+import { getSupabaseBrowserClient } from '@kit/supabase/browser-client';
 import type { 
   Company, 
   UserCompany, 
@@ -15,7 +15,7 @@ import type {
 } from './types';
 
 class CompaniesService {
-  private supabase = createBrowserClient();
+  private supabase = getSupabaseBrowserClient();
 
   /**
    * Get all companies for the current user

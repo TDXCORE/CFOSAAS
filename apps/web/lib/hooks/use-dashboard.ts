@@ -8,7 +8,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { dashboardService, type DashboardMetrics, type ColombianKPIs } from '~/lib/analytics/dashboard-service';
 import { useCurrentCompany } from '~/lib/companies/tenant-context';
-import { useToast } from '@kit/ui/use-toast';
+import { toast } from 'sonner';
 
 interface UseDashboardOptions {
   refreshInterval?: number; // in milliseconds
@@ -47,7 +47,6 @@ export function useDashboard(options: UseDashboardOptions = {}): UseDashboardRet
     onError,
   } = options;
 
-  const { toast } = useToast();
   const currentCompany = useCurrentCompany();
   
   // State
@@ -95,10 +94,7 @@ export function useDashboard(options: UseDashboardOptions = {}): UseDashboardRet
 
       // Show success message only for manual refresh
       if (showRefreshingState) {
-        toast({
-          title: 'Dashboard Actualizado',
-          description: 'Los datos se han actualizado correctamente',
-        });
+        toast.success('Dashboard actualizado: Los datos se han actualizado correctamente');
       }
 
     } catch (err) {
@@ -111,18 +107,14 @@ export function useDashboard(options: UseDashboardOptions = {}): UseDashboardRet
 
       console.error('Dashboard data loading error:', error);
       
-      toast({
-        title: 'Error al Cargar Dashboard',
-        description: error.message,
-        variant: 'destructive',
-      });
+      toast.error('Error al cargar dashboard: ' + error.message);
     } finally {
       if (mountedRef.current) {
         setIsLoading(false);
         setIsRefreshing(false);
       }
     }
-  }, [currentCompany, onDataUpdate, onError, toast]);
+  }, [currentCompany, onDataUpdate, onError]);
 
   /**
    * Manual refresh
@@ -153,27 +145,21 @@ export function useDashboard(options: UseDashboardOptions = {}): UseDashboardRet
     setIsRealTimeEnabled(prev => {
       const newValue = !prev;
       
-      toast({
-        title: newValue ? 'Actualizaciones Automáticas Activadas' : 'Actualizaciones Automáticas Desactivadas',
-        description: newValue 
-          ? `Dashboard se actualizará cada ${refreshInterval / 60000} minutos`
-          : 'Deberás actualizar manualmente',
-      });
+      const message = newValue 
+        ? `Actualizaciones automáticas activadas: Dashboard se actualizará cada ${refreshInterval / 60000} minutos`
+        : 'Actualizaciones automáticas desactivadas: Deberás actualizar manualmente';
+      toast.success(message);
       
       return newValue;
     });
-  }, [toast, refreshInterval]);
+  }, [refreshInterval]);
 
   /**
    * Export dashboard data
    */
   const exportData = useCallback(async (format: 'json' | 'csv') => {
     if (!metrics || !kpis || !currentCompany) {
-      toast({
-        title: 'No hay datos para exportar',
-        description: 'Espera a que se carguen los datos del dashboard',
-        variant: 'destructive',
-      });
+      toast.error('No hay datos para exportar: Espera a que se carguen los datos del dashboard');
       return;
     }
 
@@ -228,20 +214,13 @@ export function useDashboard(options: UseDashboardOptions = {}): UseDashboardRet
       document.body.removeChild(link);
       URL.revokeObjectURL(url);
 
-      toast({
-        title: 'Exportación Exitosa',
-        description: `Dashboard exportado como ${format.toUpperCase()}`,
-      });
+      toast.success(`Exportación exitosa: Dashboard exportado como ${format.toUpperCase()}`);
 
     } catch (error) {
       console.error('Export error:', error);
-      toast({
-        title: 'Error al Exportar',
-        description: 'No se pudo exportar el dashboard',
-        variant: 'destructive',
-      });
+      toast.error('Error al exportar: No se pudo exportar el dashboard');
     }
-  }, [metrics, kpis, currentCompany, lastUpdated, toast]);
+  }, [metrics, kpis, currentCompany, lastUpdated]);
 
   // Load initial data when company changes
   useEffect(() => {

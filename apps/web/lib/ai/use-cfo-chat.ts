@@ -7,7 +7,7 @@
 
 import { useState, useCallback, useRef, useEffect } from 'react';
 import { cfoAssistant, type CFOContext, type CFOMessage, type CFOResponse, type InvoiceMetrics } from './cfo-assistant';
-import { useToast } from '@kit/ui/use-toast';
+import { toast } from 'sonner';
 
 interface UseCFOChatOptions {
   context: CFOContext;
@@ -46,7 +46,6 @@ export function useCFOChat({
   onResponseReceived,
   autoLoadInsights = true,
 }: UseCFOChatOptions): UseCFOChatReturn {
-  const { toast } = useToast();
   const [messages, setMessages] = useState<CFOMessage[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [isTyping, setIsTyping] = useState(false);
@@ -146,10 +145,7 @@ export function useCFOChat({
         if (response.actions && response.actions.length > 0) {
           const highPriorityActions = response.actions.filter(a => a.priority === 'high');
           if (highPriorityActions.length > 0) {
-            toast({
-              title: 'Acciones Recomendadas',
-              description: `${highPriorityActions.length} recomendación(es) de alta prioridad disponible(s)`,
-            });
+            toast.success(`${highPriorityActions.length} recomendación(es) de alta prioridad disponible(s)`);
           }
         }
       } else {
@@ -167,16 +163,12 @@ export function useCFOChat({
 
       onResponseReceived?.(errorMessage);
 
-      toast({
-        title: 'Error de Comunicación',
-        description: 'No pude procesar tu mensaje. Por favor intenta de nuevo.',
-        variant: 'destructive',
-      });
+      toast.error('Error de comunicación: No pude procesar tu mensaje. Por favor intenta de nuevo.');
     } finally {
       setIsLoading(false);
       setIsTyping(false);
     }
-  }, [context, metrics, messages, isLoading, addMessage, onMessageSent, onResponseReceived, toast]);
+  }, [context, metrics, messages, isLoading, addMessage, onMessageSent, onResponseReceived]);
 
   /**
    * Get proactive insights from CFO
@@ -259,15 +251,11 @@ export function useCFOChat({
     } catch (error) {
       console.error('Invoice analysis error:', error);
       setIsTyping(false);
-      toast({
-        title: 'Error en Análisis',
-        description: 'No pude analizar las facturas. Intenta de nuevo.',
-        variant: 'destructive',
-      });
+      toast.error('Error en análisis: No pude analizar las facturas. Intenta de nuevo.');
     } finally {
       setIsLoading(false);
     }
-  }, [context, isLoading, addMessage, onResponseReceived, toast]);
+  }, [context, isLoading, addMessage, onResponseReceived]);
 
   /**
    * Regenerate last AI response
@@ -296,11 +284,8 @@ export function useCFOChat({
     localStorage.removeItem(chatKey);
     lastMessageRef.current = '';
     
-    toast({
-      title: 'Chat Limpio',
-      description: 'El historial de conversación ha sido eliminado.',
-    });
-  }, [chatKey, toast]);
+    toast.success('Chat limpio: El historial de conversación ha sido eliminado.');
+  }, [chatKey]);
 
   /**
    * Export chat history as JSON
@@ -324,33 +309,22 @@ export function useCFOChat({
       const parsed = JSON.parse(chatData);
       
       if (parsed.companyId !== context.companyId) {
-        toast({
-          title: 'Error de Importación',
-          description: 'Este chat pertenece a otra empresa.',
-          variant: 'destructive',
-        });
+        toast.error('Error de importación: Este chat pertenece a otra empresa.');
         return false;
       }
 
       if (Array.isArray(parsed.messages)) {
         setMessages(parsed.messages.slice(-MAX_MESSAGES));
-        toast({
-          title: 'Chat Importado',
-          description: `Se importaron ${parsed.messages.length} mensajes.`,
-        });
+        toast.success(`Chat importado: Se importaron ${parsed.messages.length} mensajes.`);
         return true;
       }
 
       return false;
     } catch (error) {
-      toast({
-        title: 'Error de Importación',
-        description: 'Formato de archivo inválido.',
-        variant: 'destructive',
-      });
+      toast.error('Error de importación: Formato de archivo inválido.');
       return false;
     }
-  }, [context.companyId, toast]);
+  }, [context.companyId]);
 
   return {
     // State

@@ -3,7 +3,7 @@
  * Temporary replacement for @kit/ui/progress
  */
 
-import { cn } from '@kit/ui/shadcn';
+import { cn } from '@kit/ui/utils';
 
 interface ProgressProps {
   value: number;

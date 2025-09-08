@@ -3,7 +3,7 @@
  * Handles invoice CRUD operations, file processing, and tax calculations
  */
 
-import { createBrowserClient } from '@kit/supabase/client';
+import { getSupabaseBrowserClient } from '@kit/supabase/browser-client';
 import type {
   Invoice,
   InvoiceLineItem,
@@ -20,7 +20,7 @@ import type {
 } from './types';
 
 class InvoicesService {
-  private supabase = createBrowserClient();
+  private supabase = getSupabaseBrowserClient();
 
   /**
    * Get invoices for a company with filters and pagination
