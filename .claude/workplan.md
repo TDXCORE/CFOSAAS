@@ -40,10 +40,10 @@
 
 ### Milestone 1.3: AI CFO y Dashboard (Semana 7-9)
 - [x] AI CFO virtual con OpenAI GPT-4 Turbo (CFO experto)
-- [ ] Dashboard financiero con KPIs específicos para Colombia
+- [x] Dashboard financiero con KPIs específicos para Colombia
 - [x] Sistema de chat conversacional con el CFO virtual
-- [ ] Reportes de facturas procesadas
-- [ ] Sistema de exportación (CSV, Excel) - almacenamiento local
+- [x] Reportes de facturas procesadas
+- [x] Sistema de exportación (CSV, Excel) - almacenamiento local
 - [ ] Módulo de validación manual (checkpoints)
 - [x] Interface de gestión de empresas (multi-tenant)
 
