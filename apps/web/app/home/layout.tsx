@@ -19,15 +19,20 @@ import { requireUserInServerComponent } from '~/lib/server/require-user-in-serve
 import { HomeMenuNavigation } from './_components/home-menu-navigation';
 import { HomeMobileNavigation } from './_components/home-mobile-navigation';
 import { HomeSidebar } from './_components/home-sidebar';
+import { TenantWrapper } from './_components/tenant-wrapper';
 
 function HomeLayout({ children }: React.PropsWithChildren) {
   const style = use(getLayoutStyle());
 
-  if (style === 'sidebar') {
-    return <SidebarLayout>{children}</SidebarLayout>;
-  }
-
-  return <HeaderLayout>{children}</HeaderLayout>;
+  return (
+    <TenantWrapper>
+      {style === 'sidebar' ? (
+        <SidebarLayout>{children}</SidebarLayout>
+      ) : (
+        <HeaderLayout>{children}</HeaderLayout>
+      )}
+    </TenantWrapper>
+  );
 }
 
 export default withI18n(HomeLayout);

@@ -11,7 +11,6 @@ import {
 import { AppLogo } from '~/components/app-logo';
 import { CompanySelector } from '~/components/company-selector';
 import { ProfileAccountDropdownContainer } from '~/components/personal-account-dropdown-container';
-import { TenantProvider } from '~/lib/companies/tenant-context';
 import { navigationConfig } from '~/config/navigation.config';
 import { Tables } from '~/lib/database.types';
 
@@ -20,8 +19,7 @@ export function HomeSidebar(props: {
   user: User;
 }) {
   return (
-    <TenantProvider>
-      <Sidebar collapsible={'icon'}>
+    <Sidebar collapsible={'icon'}>
         <SidebarHeader className={'h-16 justify-center'}>
           <div className={'flex items-center justify-between space-x-2'}>
             <div>
@@ -45,7 +43,6 @@ export function HomeSidebar(props: {
             account={props.account}
           />
         </SidebarFooter>
-      </Sidebar>
-    </TenantProvider>
+    </Sidebar>
   );
 }
