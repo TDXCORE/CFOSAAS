@@ -9,7 +9,7 @@ import { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@kit/ui/card';
 import { Badge } from '@kit/ui/badge';
 import { Button } from '@kit/ui/button';
-import { Progress } from '@kit/ui/progress';
+import { Progress } from '~/components/ui/progress';
 import { Alert, AlertDescription } from '@kit/ui/alert';
 import { 
   TrendingUp, 
@@ -43,14 +43,13 @@ import {
 } from 'recharts';
 import { useCurrentCompany } from '~/lib/companies/tenant-context';
 import { dashboardService, type DashboardMetrics, type ColombianKPIs } from '~/lib/analytics/dashboard-service';
-import { useToast } from '@kit/ui/use-toast';
+import { toast } from 'sonner';
 
 interface FinancialDashboardProps {
   className?: string;
 }
 
 export function FinancialDashboard({ className }: FinancialDashboardProps) {
-  const { toast } = useToast();
   const currentCompany = useCurrentCompany();
   
   const [metrics, setMetrics] = useState<DashboardMetrics | null>(null);
@@ -80,11 +79,7 @@ export function FinancialDashboard({ className }: FinancialDashboardProps) {
       setKPIs(colombianKPIs);
     } catch (error) {
       console.error('Error loading dashboard data:', error);
-      toast({
-        title: 'Error',
-        description: 'No se pudieron cargar las métricas del dashboard',
-        variant: 'destructive',
-      });
+      toast.error('No se pudieron cargar las métricas del dashboard');
     } finally {
       setIsLoading(false);
     }
@@ -95,10 +90,7 @@ export function FinancialDashboard({ className }: FinancialDashboardProps) {
     await loadDashboardData();
     setRefreshing(false);
     
-    toast({
-      title: 'Dashboard Actualizado',
-      description: 'Las métricas se han actualizado exitosamente',
-    });
+    toast.success('Dashboard actualizado exitosamente');
   };
 
   const formatCurrency = (amount: number) => {

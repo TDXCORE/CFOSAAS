@@ -1,4 +1,13 @@
-import { Home, User } from 'lucide-react';
+import { 
+  Home, 
+  User, 
+  BarChart3, 
+  FileText, 
+  Upload, 
+  MessageSquare, 
+  Building,
+  PieChart 
+} from 'lucide-react';
 import { z } from 'zod';
 
 import { NavigationConfigSchema } from '@kit/ui/navigation-schema';
@@ -16,6 +25,36 @@ const routes = [
         path: pathsConfig.app.home,
         Icon: <Home className={iconClasses} />,
         end: true,
+      },
+    ],
+  },
+  {
+    label: 'CFO SaaS',
+    children: [
+      {
+        label: 'Dashboard Financiero',
+        path: pathsConfig.app.dashboard,
+        Icon: <BarChart3 className={iconClasses} />,
+      },
+      {
+        label: 'Facturas',
+        path: pathsConfig.app.invoices,
+        Icon: <FileText className={iconClasses} />,
+      },
+      {
+        label: 'Reportes',
+        path: pathsConfig.app.reports,
+        Icon: <PieChart className={iconClasses} />,
+      },
+      {
+        label: 'CFO Virtual',
+        path: pathsConfig.app.cfoChat,
+        Icon: <MessageSquare className={iconClasses} />,
+      },
+      {
+        label: 'Empresas',
+        path: pathsConfig.app.companies,
+        Icon: <Building className={iconClasses} />,
       },
     ],
   },

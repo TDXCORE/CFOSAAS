@@ -34,7 +34,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@kit/ui/select';
-import { useToast } from '@kit/ui/use-toast';
+import { toast } from 'sonner';
 import { useUser } from '@kit/supabase/hooks/use-user';
 import { companiesService } from '~/lib/companies/companies-service';
 import { useTenant } from '~/lib/companies/tenant-context';
@@ -86,7 +86,6 @@ interface CreateCompanyDialogProps {
 
 export function CreateCompanyDialog({ open, onOpenChange }: CreateCompanyDialogProps) {
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const { toast } = useToast();
   const user = useUser();
   const { refreshCompanies, switchCompany } = useTenant();
 
@@ -110,11 +109,7 @@ export function CreateCompanyDialog({ open, onOpenChange }: CreateCompanyDialogP
 
   const handleSubmit = async (data: CreateCompanyFormData) => {
     if (!user?.id) {
-      toast({
-        title: 'Error',
-        description: 'You must be logged in to create a company',
-        variant: 'destructive',
-      });
+      toast.error('You must be logged in to create a company');
       return;
     }
 
@@ -137,18 +132,11 @@ export function CreateCompanyDialog({ open, onOpenChange }: CreateCompanyDialogP
       const { data: company, error } = await companiesService.createCompany(companyData, user.id);
 
       if (error || !company) {
-        toast({
-          title: 'Error',
-          description: error || 'Failed to create company',
-          variant: 'destructive',
-        });
+        toast.error('Failed to create company: ' + (error || 'Unknown error'));
         return;
       }
 
-      toast({
-        title: 'Success',
-        description: 'Company created successfully',
-      });
+      toast.success('Company created successfully');
 
       // Refresh companies list and switch to new company
       await refreshCompanies();
@@ -160,11 +148,7 @@ export function CreateCompanyDialog({ open, onOpenChange }: CreateCompanyDialogP
 
     } catch (error) {
       console.error('Error creating company:', error);
-      toast({
-        title: 'Error',
-        description: 'An unexpected error occurred',
-        variant: 'destructive',
-      });
+      toast.error('An unexpected error occurred');
     } finally {
       setIsSubmitting(false);
     }

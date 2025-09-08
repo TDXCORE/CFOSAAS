@@ -7,7 +7,7 @@
 
 import { Card, CardContent, CardHeader, CardTitle } from '@kit/ui/card';
 import { Badge } from '@kit/ui/badge';
-import { Progress } from '@kit/ui/progress';
+import { Progress } from '~/components/ui/progress';
 import { 
   TrendingUp, 
   TrendingDown, 

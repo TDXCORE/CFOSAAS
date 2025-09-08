@@ -1,12 +1,12 @@
 import { PageBody, PageHeader } from '@kit/ui/page';
 import { FinancialDashboard } from '~/components/dashboard/financial-dashboard';
 
-export default function HomePage() {
+export default function DashboardPage() {
   return (
     <>
       <PageHeader 
-        title="Dashboard CFO"
-        description="Análisis financiero y métricas de tu empresa en Colombia"
+        title="Dashboard Financiero"
+        description="Análisis completo de métricas financieras y KPIs específicos para Colombia"
       />
 
       <PageBody>

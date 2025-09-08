@@ -19,10 +19,10 @@ import {
 } from 'lucide-react';
 import { Button } from '@kit/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@kit/ui/card';
-import { Progress } from '@kit/ui/progress';
+import { Progress } from '~/components/ui/progress';
 import { Alert, AlertDescription } from '@kit/ui/alert';
 import { Badge } from '@kit/ui/badge';
-import { useToast } from '@kit/ui/use-toast';
+import { toast } from 'sonner';
 import { useCurrentCompany } from '~/lib/companies/tenant-context';
 import { xmlProcessor } from '~/lib/invoices/xml-processor';
 import { invoicesService } from '~/lib/invoices/invoices-service';
@@ -42,16 +42,11 @@ export function InvoiceUpload({
 }: InvoiceUploadProps) {
   const [uploadFiles, setUploadFiles] = useState<FileUploadProgress[]>([]);
   const [isUploading, setIsUploading] = useState(false);
-  const { toast } = useToast();
   const currentCompany = useCurrentCompany();
 
   const onDrop = useCallback(async (acceptedFiles: File[]) => {
     if (!currentCompany) {
-      toast({
-        title: 'Error',
-        description: 'Please select a company first',
-        variant: 'destructive',
-      });
+      toast.error('Please select a company first');
       return;
     }
 
@@ -244,21 +239,14 @@ export function InvoiceUpload({
 
       // Show success message
       if (processedInvoiceIds.length > 0) {
-        toast({
-          title: 'Upload Complete',
-          description: `Successfully processed ${processedInvoiceIds.length} invoice(s)`,
-        });
+        toast.success(`Upload complete: ${processedInvoiceIds.length} invoice(s) processed`);
 
         onUploadComplete?.(processedInvoiceIds);
       }
 
     } catch (error) {
       console.error('Upload error:', error);
-      toast({
-        title: 'Upload Failed',
-        description: error instanceof Error ? error.message : 'Unknown error occurred',
-        variant: 'destructive',
-      });
+      toast.error('Upload failed: ' + (error instanceof Error ? error.message : 'Unknown error occurred'));
     } finally {
       setIsUploading(false);
     }

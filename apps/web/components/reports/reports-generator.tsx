@@ -34,14 +34,13 @@ import {
 import { useCurrentCompany } from '~/lib/companies/tenant-context';
 import { reportsService, type ReportTemplate } from '~/lib/reports/reports-service';
 import type { InvoiceFilters, ExportOptions } from '~/lib/invoices/types';
-import { useToast } from '@kit/ui/use-toast';
+import { toast } from 'sonner';
 
 interface ReportsGeneratorProps {
   className?: string;
 }
 
 export function ReportsGenerator({ className }: ReportsGeneratorProps) {
-  const { toast } = useToast();
   const currentCompany = useCurrentCompany();
   
   const [selectedTemplate, setSelectedTemplate] = useState<ReportTemplate | null>(null);
@@ -77,11 +76,7 @@ export function ReportsGenerator({ className }: ReportsGeneratorProps) {
 
   const generateReport = useCallback(async () => {
     if (!selectedTemplate || !currentCompany) {
-      toast({
-        title: 'Error',
-        description: 'Selecciona un template de reporte primero',
-        variant: 'destructive',
-      });
+      toast.error('Selecciona un template de reporte primero');
       return;
     }
 
@@ -117,30 +112,19 @@ export function ReportsGenerator({ className }: ReportsGeneratorProps) {
 
       setReportData(data);
       
-      toast({
-        title: 'Reporte Generado',
-        description: `Se generaron ${data.length} registros`,
-      });
+      toast.success(`Reporte generado: ${data.length} registros`);
 
     } catch (error) {
       console.error('Error generating report:', error);
-      toast({
-        title: 'Error al Generar Reporte',
-        description: error instanceof Error ? error.message : 'Error desconocido',
-        variant: 'destructive',
-      });
+      toast.error('Error al generar reporte: ' + (error instanceof Error ? error.message : 'Error desconocido'));
     } finally {
       setIsGenerating(false);
     }
-  }, [selectedTemplate, currentCompany, filters, toast]);
+  }, [selectedTemplate, currentCompany, filters]);
 
   const exportReport = useCallback(async () => {
     if (!selectedTemplate || !reportData) {
-      toast({
-        title: 'Error',
-        description: 'Genera el reporte primero antes de exportar',
-        variant: 'destructive',
-      });
+      toast.error('Genera el reporte primero antes de exportar');
       return;
     }
 
@@ -156,18 +140,11 @@ export function ReportsGenerator({ className }: ReportsGeneratorProps) {
     const result = await reportsService.exportReport(reportData, selectedTemplate, exportOptions);
 
     if (result.success) {
-      toast({
-        title: 'Exportación Exitosa',
-        description: `Reporte exportado como ${result.file_name}`,
-      });
+      toast.success(`Reporte exportado como ${result.file_name}`);
     } else {
-      toast({
-        title: 'Error al Exportar',
-        description: result.error || 'No se pudo exportar el reporte',
-        variant: 'destructive',
-      });
+      toast.error('Error al exportar: ' + (result.error || 'No se pudo exportar el reporte'));
     }
-  }, [selectedTemplate, reportData, exportFormat, filters, toast]);
+  }, [selectedTemplate, reportData, exportFormat, filters]);
 
   const formatValue = (value: any, type: string) => {
     if (value === null || value === undefined) return 'N/A';
