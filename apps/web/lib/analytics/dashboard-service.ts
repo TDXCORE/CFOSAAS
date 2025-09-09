@@ -143,7 +143,7 @@ interface DashboardMetrics {
 
 class DashboardService {
   private supabase = getSupabaseClient();
-  private isDemoMode = true; // Temporal: usar datos mock hasta solucionar autenticación
+  private isDemoMode = false; // Intentar datos reales primero
 
   /**
    * Get comprehensive dashboard metrics for a company
