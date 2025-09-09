@@ -16,7 +16,8 @@
       "Bash(npx tsc:*)",
       "Bash(git reset:*)",
       "Bash(git checkout:*)",
-      "Bash(pnpm run dev:*)"
+      "Bash(pnpm run dev:*)",
+      "Bash(cd:*)"
     ],
     "deny": [],
     "ask": []

@@ -4,6 +4,8 @@
  */
 
 import { getSupabaseClient } from '../supabase/client-singleton';
+import { pucClassifier } from '../puc/puc-classifier';
+import { colombianTaxEngine } from '../taxes/colombian-tax-engine';
 import type {
   Invoice,
   InvoiceLineItem,
@@ -347,116 +349,65 @@ class InvoicesService {
   }
 
   /**
-   * Calculate Colombian taxes for an invoice
+   * Calculate Colombian taxes for an invoice using the advanced tax engine
    */
   async calculateColombianTaxes(input: ColombianTaxCalculationInput): Promise<{
     data: ColombianTaxCalculationResult | null;
     error?: string;
   }> {
     try {
-      // This would integrate with the Colombian tax rules from the database
-      // For now, implementing basic calculations
-      
-      const result: ColombianTaxCalculationResult = {
-        iva: {
-          applicable: true,
-          rate: 0.19, // 19% default
-          amount: input.invoice_amount * 0.19,
-          rule_applied: 'general_iva_19',
+      // Build tax context from input
+      const taxContext = {
+        invoice_amount: input.invoice_amount,
+        service_type: input.service_type,
+        supplier: {
+          tax_id: input.supplier_tax_id || '',
+          name: input.supplier_name || '',
+          entity_type: input.supplier_type === 'natural_person' ? 'natural_person' as const : 'company' as const,
+          municipality: input.company_location,
+          is_ica_subject: true, // Default - could be determined by business rules
+          retention_agent: input.supplier_type === 'company', // Companies are typically retention agents
+          iva_regime: 'common' as const, // Default regime
         },
-        retencion_fuente: {
-          applicable: false,
-          rate: 0,
-          amount: 0,
-          rule_applied: 'none',
+        customer: {
+          tax_id: input.customer_tax_id || '',
+          name: input.customer_name || '',
+          entity_type: 'company' as const, // Assuming customer is company
+          retention_agent: true, // Assume customer can withhold taxes
+          iva_regime: 'common' as const,
         },
-        ica: {
-          applicable: false,
-          rate: 0,
-          amount: 0,
-          municipality: '',
-          rule_applied: 'none',
-        },
-        total_taxes: input.invoice_amount * 0.19,
-        total_retentions: 0,
-        net_amount: input.invoice_amount + (input.invoice_amount * 0.19),
+        issue_date: new Date(),
+        municipality: input.company_location,
       };
 
-      // Apply retention rules based on service type and amount
-      if (input.supplier_type === 'company') {
-        switch (input.service_type) {
-          case 'services':
-            if (input.invoice_amount >= 4000000) { // 4M COP threshold
-              result.retencion_fuente = {
-                applicable: true,
-                rate: 0.11,
-                amount: input.invoice_amount * 0.11,
-                rule_applied: 'services_11_percent',
-              };
-            }
-            break;
-          
-          case 'goods':
-            if (input.invoice_amount >= 1000000) { // 1M COP threshold
-              result.retencion_fuente = {
-                applicable: true,
-                rate: 0.025,
-                amount: input.invoice_amount * 0.025,
-                rule_applied: 'goods_2_5_percent',
-              };
-            }
-            break;
-          
-          case 'construction':
-            if (input.invoice_amount >= 500000) { // 500K COP threshold
-              result.retencion_fuente = {
-                applicable: true,
-                rate: 0.04,
-                amount: input.invoice_amount * 0.04,
-                rule_applied: 'construction_4_percent',
-              };
-            }
-            break;
-          
-          case 'rent':
-            if (input.invoice_amount >= 1000000) { // 1M COP threshold
-              result.retencion_fuente = {
-                applicable: true,
-                rate: 0.035,
-                amount: input.invoice_amount * 0.035,
-                rule_applied: 'rent_3_5_percent',
-              };
-            }
-            break;
-        }
-      }
+      // Calculate taxes using the advanced engine
+      const taxResult = await colombianTaxEngine.calculateTaxes(taxContext);
 
-      // Apply ICA based on location
-      if (input.company_location) {
-        const icaRates: Record<string, number> = {
-          'Bogotá': 0.00414,
-          'Medellín': 0.007,
-          'Cali': 0.00414,
-          'Barranquilla': 0.007,
-          'Cartagena': 0.008,
-        };
-
-        const rate = icaRates[input.company_location];
-        if (rate) {
-          result.ica = {
-            applicable: true,
-            rate,
-            amount: input.invoice_amount * rate,
-            municipality: input.company_location,
-            rule_applied: `ica_${input.company_location.toLowerCase()}`,
-          };
-        }
-      }
-
-      // Recalculate totals
-      result.total_taxes = result.iva.amount + result.ica.amount;
-      result.total_retentions = result.retencion_fuente.amount;
-      result.net_amount = input.invoice_amount + result.total_taxes - result.total_retentions;
+      // Convert to the expected result format
+      const result: ColombianTaxCalculationResult = {
+        iva: {
+          applicable: taxResult.iva.applicable,
+          rate: taxResult.iva.rate,
+          amount: taxResult.iva.amount,
+          rule_applied: taxResult.iva.rule_applied,
+        },
+        retencion_fuente: {
+          applicable: taxResult.retencion_fuente.applicable,
+          rate: taxResult.retencion_fuente.rate,
+          amount: taxResult.retencion_fuente.amount,
+          rule_applied: taxResult.retencion_fuente.rule_applied,
+        },
+        ica: {
+          applicable: taxResult.ica.applicable,
+          rate: taxResult.ica.rate,
+          amount: taxResult.ica.amount,
+          municipality: taxResult.ica.municipality,
+          rule_applied: taxResult.ica.rule_applied,
+        },
+        total_taxes: taxResult.summary.total_taxes,
+        total_retentions: taxResult.summary.total_retentions,
+        net_amount: taxResult.summary.net_amount,
+      };
 
       return { data: result };
     } catch (error) {
@@ -466,60 +417,43 @@ class InvoicesService {
   }
 
   /**
-   * Process invoice for automatic PUC classification
+   * Process invoice for automatic PUC classification using the new classifier
    */
   async classifyInvoicePUC(
     invoiceId: string, 
     companyId: string
   ): Promise<{ success: boolean; puc_code?: string; confidence?: number; error?: string }> {
     try {
-      // Get invoice details
+      // Get invoice details with line items
       const { data: invoice, error: fetchError } = await this.getInvoiceById(invoiceId, companyId);
       
       if (fetchError || !invoice) {
         return { success: false, error: 'Invoice not found' };
       }
 
-      // Get classification rules from database
-      const { data: rules } = await this.supabase
-        .from('classification_rules')
-        .select('*')
-        .or(`company_id.is.null,company_id.eq.${companyId}`)
-        .eq('is_active', true)
-        .order('priority', { ascending: false });
-
-      if (!rules?.length) {
-        return { 
-          success: false, 
-          error: 'No classification rules available' 
-        };
-      }
-
-      // Find best matching rule
-      let bestMatch = null;
-      let bestScore = 0;
-
-      for (const rule of rules) {
-        const score = this.calculateClassificationScore(invoice, rule.conditions);
-        if (score > bestScore) {
-          bestScore = score;
-          bestMatch = rule;
-        }
-      }
-
-      if (!bestMatch || bestScore < 0.5) {
-        return { 
-          success: false, 
-          error: 'No suitable classification found' 
-        };
-      }
+      // Use the new PUC classifier
+      const classification = await pucClassifier.classifyInvoice({
+        supplier_name: invoice.supplier_name,
+        invoice_number: invoice.invoice_number,
+        total_amount: invoice.total_amount,
+        line_items: invoice.line_items?.map(item => ({
+          product_name: item.product_name,
+          product_description: item.product_description,
+          line_total: item.line_total,
+        })),
+        taxes: invoice.taxes?.map(tax => ({
+          tax_type: tax.tax_type,
+          tax_amount: tax.tax_amount,
+        })),
+      });
 
       // Update invoice with classification
       const { error: updateError } = await this.updateInvoice(
         invoiceId,
         {
-          puc_code: bestMatch.puc_code,
-          account_classification_confidence: bestScore,
+          puc_code: classification.puc_code,
+          puc_name: classification.puc_name,
+          account_classification_confidence: classification.confidence,
           processing_status: 'classified',
         },
         companyId
@@ -531,8 +465,8 @@ class InvoicesService {
 
       return {
         success: true,
-        puc_code: bestMatch.puc_code,
-        confidence: bestScore,
+        puc_code: classification.puc_code,
+        confidence: classification.confidence,
       };
     } catch (error) {
       console.error('Error in classifyInvoicePUC:', error);

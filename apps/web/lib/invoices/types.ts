@@ -147,8 +147,24 @@ export type TaxType =
   | 'IVA' 
   | 'ICA' 
   | 'RETENCION_FUENTE' 
-  | 'RETENCION_IVA' 
+  | 'RETENCION_IVA'
   | 'RETENCION_ICA';
+
+// File Upload Types
+export interface FileUploadProgress {
+  file_name: string;
+  progress: number;
+  status: 'uploading' | 'processing' | 'completed' | 'error';
+  error?: string;
+  invoice_id?: string;
+  metadata?: ProcessingMetadata;
+  aiInsights?: string;
+}
+
+export interface InvoiceFileUpload {
+  file: File;
+  uploadProgress: FileUploadProgress;
+}
 
 // Processing and validation types
 export interface ProcessingMetadata {

@@ -19,14 +19,11 @@ import {
 } from 'lucide-react';
 import { Button } from '@kit/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@kit/ui/card';
-import { Progress } from '~/components/ui/progress';
+import { Progress } from '@kit/ui/progress';
 import { Alert, AlertDescription } from '@kit/ui/alert';
 import { Badge } from '@kit/ui/badge';
 import { toast } from 'sonner';
 import { useCurrentCompany } from '~/lib/companies/tenant-context';
-import { xmlProcessor } from '~/lib/invoices/xml-processor';
-import { invoicesService } from '~/lib/invoices/invoices-service';
-import { invoiceStorage } from '~/lib/storage/invoice-storage';
 import type { FileUploadProgress, InvoiceFileUpload } from '~/lib/invoices/types';
 
 interface InvoiceUploadProps {
@@ -65,158 +62,64 @@ export function InvoiceUpload({
     const processedInvoiceIds: string[] = [];
 
     try {
-      // Process files sequentially to avoid overwhelming the system
+      // Process files sequentially using the new API
       for (let i = 0; i < acceptedFiles.length; i++) {
         const file = acceptedFiles[i];
-        const fileType = getFileType(file);
 
-        // Update progress
+        // Update progress to processing
         setUploadFiles(prev => prev.map((f, idx) => 
-          idx === i ? { ...f, status: 'processing' } : f
+          idx === i ? { ...f, status: 'processing', progress: 50 } : f
         ));
 
         try {
-          // Upload file to storage first
-          const uploadResult = await invoiceStorage.uploadFile(file, {
-            originalName: file.name,
-            contentType: file.type,
-            size: file.size,
-            companyId: currentCompany.id,
-            fileType: fileType as 'xml' | 'pdf' | 'zip',
+          // Call the new processing API
+          const formData = new FormData();
+          formData.append('file', file);
+          formData.append('companyId', currentCompany.id);
+
+          const response = await fetch('/api/invoices/process', {
+            method: 'POST',
+            body: formData,
           });
 
-          if (!uploadResult.success) {
-            throw new Error(uploadResult.error || 'File upload failed');
+          const result = await response.json();
+
+          if (!response.ok || !result.success) {
+            throw new Error(result.error || 'Processing failed');
           }
 
-          if (fileType === 'xml') {
-            // Process XML file
-            const xmlContent = await readFileAsText(file);
-            const result = await xmlProcessor.processXMLInvoice(xmlContent);
-
-            if (result.error || !result.invoice) {
-              throw new Error(result.error || 'Failed to process XML');
-            }
-
-            // Create invoice in database with storage info
-            const { data: invoice, error } = await invoicesService.createInvoice(
-              {
-                ...result.invoice,
-                source_file_name: file.name,
-                source_file_type: 'xml',
-                source_file_url: uploadResult.publicUrl,
-              },
-              currentCompany.id
-            );
-
-            if (error || !invoice) {
-              throw new Error(error || 'Failed to save invoice');
-            }
-
-            processedInvoiceIds.push(invoice.id);
-
-            // Update success
-            setUploadFiles(prev => prev.map((f, idx) => 
-              idx === i ? { 
-                ...f, 
-                status: 'completed', 
-                progress: 100,
-                invoice_id: invoice.id 
-              } : f
-            ));
-
-          } else if (fileType === 'pdf') {
-            // For PDF files, create a placeholder invoice for manual entry
-            const invoiceNumber = `PDF-${Date.now()}`;
+          // Handle the response based on file type
+          if (result.results && result.results.length > 0) {
+            const fileResult = result.results[0];
             
-            const { data: invoice, error } = await invoicesService.createInvoice(
-              {
-                invoice_number: invoiceNumber,
-                issue_date: new Date().toISOString().split('T')[0],
-                supplier_tax_id: '000000000',
-                supplier_name: 'PDF Import - Requires Manual Entry',
-                subtotal: 0,
-                total_amount: 0,
-                source_file_name: file.name,
-                source_file_type: 'pdf',
-                source_file_url: uploadResult.publicUrl,
-                status: 'pending',
-                processing_status: 'uploaded',
-                manual_review_required: true,
-              },
-              currentCompany.id
-            );
-
-            if (error || !invoice) {
-              throw new Error(error || 'Failed to save PDF placeholder');
-            }
-
-            processedInvoiceIds.push(invoice.id);
-
-            setUploadFiles(prev => prev.map((f, idx) => 
-              idx === i ? { 
-                ...f, 
-                status: 'completed', 
-                progress: 100,
-                invoice_id: invoice.id 
-              } : f
-            ));
-
-          } else if (fileType === 'zip') {
-            // Process ZIP file
-            const zipResult = await invoiceStorage.processZipFile(file, {
-              originalName: file.name,
-              contentType: file.type,
-              size: file.size,
-              companyId: currentCompany.id,
-              fileType: 'zip',
-            });
-
-            if (!zipResult.success || !zipResult.extractedFiles) {
-              throw new Error(zipResult.error || 'ZIP processing failed');
-            }
-
-            // Process each extracted XML file
-            let extractedCount = 0;
-            for (const extractedFile of zipResult.extractedFiles) {
-              if (extractedFile.type === 'xml') {
-                try {
-                  const result = await xmlProcessor.processXMLInvoice(extractedFile.content);
-
-                  if (result.invoice) {
-                    const { data: invoice, error } = await invoicesService.createInvoice(
-                      {
-                        ...result.invoice,
-                        source_file_name: extractedFile.name,
-                        source_file_type: 'xml',
-                        source_file_url: uploadResult.publicUrl, // Reference to original ZIP
-                      },
-                      currentCompany.id
-                    );
-
-                    if (invoice) {
-                      processedInvoiceIds.push(invoice.id);
-                      extractedCount++;
-                    }
-                  }
-                } catch (error) {
-                  console.warn(`Failed to process ${extractedFile.name}:`, error);
-                }
+            if (fileResult.success) {
+              // Success - extract invoice IDs
+              if (fileResult.invoice?.id) {
+                processedInvoiceIds.push(fileResult.invoice.id);
               }
-            }
 
-            if (extractedCount === 0) {
-              throw new Error('No valid invoices found in ZIP file');
-            }
+              setUploadFiles(prev => prev.map((f, idx) => 
+                idx === i ? { 
+                  ...f, 
+                  status: 'completed', 
+                  progress: 100,
+                  invoice_id: fileResult.invoice?.id || fileResult.fileName,
+                  metadata: fileResult.metadata,
+                  aiInsights: fileResult.metadata?.aiInsights
+                } : f
+              ));
 
-            setUploadFiles(prev => prev.map((f, idx) => 
-              idx === i ? { 
-                ...f, 
-                status: 'completed', 
-                progress: 100,
-                invoice_id: `${extractedCount} invoices processed`
-              } : f
-            ));
+              // Show AI insights if available
+              if (fileResult.metadata?.aiInsights) {
+                toast.success(`File processed successfully! AI insights: ${fileResult.metadata.aiInsights.slice(0, 100)}...`);
+              }
+
+            } else {
+              // Processing failed
+              throw new Error(fileResult.error || 'Processing failed');
+            }
+          } else {
+            throw new Error('No processing results returned');
           }
 
         } catch (error) {
@@ -226,31 +129,26 @@ export function InvoiceUpload({
             idx === i ? { 
               ...f, 
               status: 'error', 
+              progress: 100,
               error: error instanceof Error ? error.message : 'Processing failed'
             } : f
           ));
         }
-
-        // Update progress for UI
-        setUploadFiles(prev => prev.map((f, idx) => 
-          idx === i ? { ...f, progress: 100 } : f
-        ));
       }
 
-      // Show success message
+      // Show final success message
       if (processedInvoiceIds.length > 0) {
-        toast.success(`Upload complete: ${processedInvoiceIds.length} invoice(s) processed`);
-
+        toast.success(`Upload complete! ${processedInvoiceIds.length} invoice(s) processed successfully`);
         onUploadComplete?.(processedInvoiceIds);
       }
 
     } catch (error) {
       console.error('Upload error:', error);
-      toast.error('Upload failed: ' + (error instanceof Error ? error.message : 'Unknown error occurred'));
+      toast.error('Upload failed: ' + (error instanceof Error ? error.message : 'Unknown error'));
     } finally {
       setIsUploading(false);
     }
-  }, [currentCompany, toast, onUploadComplete]);
+  }, [currentCompany, onUploadComplete]);
 
   const { getRootProps, getInputProps, isDragActive } = useDropzone({
     onDrop,
