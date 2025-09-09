@@ -19,7 +19,15 @@ import {
 } from 'lucide-react';
 import { Button } from '@kit/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@kit/ui/card';
-import { Progress } from '@kit/ui/progress';
+// Simple progress component since @kit/ui doesn't export Progress
+const Progress = ({ value, className }: { value: number; className?: string }) => (
+  <div className={`w-full bg-gray-200 rounded-full h-1 ${className}`}>
+    <div 
+      className="bg-blue-600 h-1 rounded-full transition-all duration-300" 
+      style={{ width: `${Math.min(100, Math.max(0, value))}%` }}
+    />
+  </div>
+);
 import { Alert, AlertDescription } from '@kit/ui/alert';
 import { Badge } from '@kit/ui/badge';
 import { toast } from 'sonner';
