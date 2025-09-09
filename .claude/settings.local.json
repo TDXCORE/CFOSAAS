@@ -12,7 +12,8 @@
       "Bash(npm run build:*)",
       "Bash(pnpm supabase:web:status:*)",
       "Bash(npx supabase:*)",
-      "Bash(npm run dev:*)"
+      "Bash(npm run dev:*)",
+      "Bash(npx tsc:*)"
     ],
     "deny": [],
     "ask": []
