@@ -143,7 +143,7 @@ interface DashboardMetrics {
 
 class DashboardService {
   private supabase = getSupabaseClient();
-  private isDemoMode = process.env.NODE_ENV === 'development';
+  private isDemoMode = true; // Temporal: forzar datos mock
 
   /**
    * Get comprehensive dashboard metrics for a company
