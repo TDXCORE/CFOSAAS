@@ -33,6 +33,7 @@ import {
   BarChart, 
   Bar, 
   PieChart as RechartsPieChart,
+  Pie,
   Cell,
   XAxis, 
   YAxis, 
@@ -163,7 +164,7 @@ export function FinancialDashboard({ className }: FinancialDashboardProps) {
       </div>
 
       {/* Alerts */}
-      {metrics.alerts.length > 0 && (
+      {metrics.alerts && metrics.alerts.length > 0 && (
         <div className="space-y-2">
           {metrics.alerts.slice(0, 3).map((alert, index) => (
             <Alert key={index} variant={alert.type === 'error' ? 'destructive' : 'default'}>
@@ -273,7 +274,7 @@ export function FinancialDashboard({ className }: FinancialDashboardProps) {
           </CardHeader>
           <CardContent>
             <ResponsiveContainer width="100%" height={300}>
-              <AreaChart data={metrics.trends.monthly}>
+              <AreaChart data={metrics.trends?.monthly || []}>
                 <CartesianGrid strokeDasharray="3 3" />
                 <XAxis dataKey="month" />
                 <YAxis tickFormatter={(value) => `$${(value / 1000000).toFixed(1)}M`} />
@@ -331,8 +332,8 @@ export function FinancialDashboard({ className }: FinancialDashboardProps) {
             <div className="flex justify-between items-center">
               <span className="text-sm font-medium">Flujo de Caja</span>
               <div className="text-right">
-                <div className={`font-semibold ${metrics.financial.cashFlow.net >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                  {formatCurrency(metrics.financial.cashFlow.net)}
+                <div className={`font-semibold ${metrics.financial.cashFlow?.net >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                  {formatCurrency(metrics.financial.cashFlow?.net || 0)}
                 </div>
               </div>
             </div>
@@ -395,7 +396,7 @@ export function FinancialDashboard({ className }: FinancialDashboardProps) {
           </CardHeader>
           <CardContent>
             <div className="space-y-3">
-              {metrics.suppliers.top5.slice(0, 5).map((supplier, index) => (
+              {(metrics.suppliers?.top5 || []).slice(0, 5).map((supplier, index) => (
                 <div key={supplier.id} className="flex items-center justify-between">
                   <div className="flex items-center space-x-3">
                     <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center text-sm font-medium">
@@ -429,7 +430,7 @@ export function FinancialDashboard({ className }: FinancialDashboardProps) {
         </CardHeader>
         <CardContent>
           <ResponsiveContainer width="100%" height={250}>
-            <BarChart data={metrics.trends.weekly}>
+            <BarChart data={metrics.trends?.weekly || []}>
               <CartesianGrid strokeDasharray="3 3" />
               <XAxis dataKey="week" />
               <YAxis />
