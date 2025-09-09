@@ -143,22 +143,29 @@ interface DashboardMetrics {
 
 class DashboardService {
   private supabase = getSupabaseClient();
-  private isDemoMode = false; // Usar datos reales de Supabase
+  private isDemoMode = true; // Temporal: usar datos mock hasta solucionar autenticación
 
   /**
    * Get comprehensive dashboard metrics for a company
    */
   async getDashboardMetrics(companyId: string): Promise<DashboardMetrics> {
     try {
+      // Check if we should force demo mode for debugging/fallback
+      if (this.isDemoMode) {
+        console.log('Demo mode enabled, using mock data for dashboard metrics');
+        await simulateApiDelay(800);
+        return generateMockDashboardMetrics(companyId);
+      }
+
       // Simulate API delay for realistic UX
       await simulateApiDelay(800);
 
       // Try to get real data first
       const realData = await this.getRealDashboardMetrics(companyId);
       
-      // If no real data available, use mock data
+      // If no real data available or authentication issues, fallback to mock data
       if (!realData || realData.overview.totalInvoices === 0) {
-        console.log('Using mock data for dashboard metrics');
+        console.log('No real data found or authentication issue, using mock data for dashboard metrics');
         return generateMockDashboardMetrics(companyId);
       }
       
@@ -196,6 +203,12 @@ class DashboardService {
    */
   private async getRealDashboardMetrics(companyId: string): Promise<DashboardMetrics | null> {
     try {
+      // Validate companyId
+      if (!companyId || companyId === 'undefined' || companyId === 'null') {
+        console.warn('Invalid companyId provided:', companyId);
+        return null;
+      }
+
       const [
         overview,
         financial,
@@ -212,6 +225,12 @@ class DashboardService {
         this.getAlerts(companyId)
       ]);
 
+      // Validate that we got valid data
+      if (!overview || overview.totalInvoices === undefined) {
+        console.warn('Invalid overview data received');
+        return null;
+      }
+
       return {
         overview,
         financial,
@@ -219,6 +238,11 @@ class DashboardService {
         suppliers,
         trends,
         alerts,
+        period: {
+          startDate: new Date().toISOString(),
+          endDate: new Date().toISOString(),
+          type: 'monthly' as const
+        }
       };
     } catch (error) {
       console.warn('Failed to fetch real metrics:', error);
@@ -230,15 +254,56 @@ class DashboardService {
    * Get overview metrics
    */
   private async getOverviewMetrics(companyId: string) {
-    const today = new Date().toISOString().split('T')[0];
-    
-    const { data: invoices, error } = await this.supabase
-      .from('invoices')
-      .select('id, total_amount, status, processing_status, created_at')
-      .eq('company_id', companyId);
+    try {
+      const today = new Date().toISOString().split('T')[0];
+      
+      const { data: invoices, error } = await this.supabase
+        .from('invoices')
+        .select('id, total_amount, status, processing_status, created_at')
+        .eq('company_id', companyId);
 
-    if (error) {
-      console.warn('Error fetching overview metrics:', error);
+      if (error) {
+        console.warn('Error fetching overview metrics:', error.message, error.details);
+        return {
+          totalInvoices: 0,
+          totalAmount: 0,
+          pendingReview: 0,
+          processedToday: 0,
+        };
+      }
+
+      if (!invoices) {
+        console.warn('No invoices data returned for company:', companyId);
+        return {
+          totalInvoices: 0,
+          totalAmount: 0,
+          pendingReview: 0,
+          processedToday: 0,
+        };
+      }
+
+      const totalInvoices = invoices.length;
+      const totalAmount = invoices.reduce((sum, inv) => sum + (inv.total_amount || 0), 0);
+      const pendingReview = invoices.filter(inv => inv.status === 'pending').length;
+      const processedToday = invoices.filter(inv => 
+        inv.created_at?.startsWith(today)
+      ).length;
+
+      console.log(`Overview metrics for company ${companyId}:`, {
+        totalInvoices,
+        totalAmount,
+        pendingReview,
+        processedToday
+      });
+
+      return {
+        totalInvoices,
+        totalAmount,
+        pendingReview,
+        processedToday,
+      };
+    } catch (error) {
+      console.error('Exception in getOverviewMetrics:', error);
       return {
         totalInvoices: 0,
         totalAmount: 0,
@@ -246,20 +311,6 @@ class DashboardService {
         processedToday: 0,
       };
     }
-
-    const totalInvoices = invoices?.length || 0;
-    const totalAmount = invoices?.reduce((sum, inv) => sum + (inv.total_amount || 0), 0) || 0;
-    const pendingReview = invoices?.filter(inv => inv.status === 'pending').length || 0;
-    const processedToday = invoices?.filter(inv => 
-      inv.created_at?.startsWith(today)
-    ).length || 0;
-
-    return {
-      totalInvoices,
-      totalAmount,
-      pendingReview,
-      processedToday,
-    };
   }
 
   /**
