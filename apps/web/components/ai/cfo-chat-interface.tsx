@@ -25,6 +25,7 @@ import {
 } from 'lucide-react';
 import { useCurrentCompany } from '~/lib/companies/tenant-context';
 import { toast } from 'sonner';
+import { MessageEnhancements } from './message-enhancements';
 
 interface CFOChatInterfaceProps {
   className?: string;
@@ -38,7 +39,7 @@ export function CFOChatInterface({ className }: CFOChatInterfaceProps) {
   const [isTyping, setIsTyping] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   
-  // Simple mock functions to replace the complex hooks
+  // Real AI-powered CFO chat with OpenAI integration
   const sendMessage = async (message: string) => {
     if (!message.trim()) return;
     
@@ -53,19 +54,80 @@ export function CFOChatInterface({ className }: CFOChatInterfaceProps) {
     setIsLoading(true);
     setIsTyping(true);
     
-    // Simulate AI response
-    setTimeout(() => {
+    try {
+      // Prepare context for AI
+      const context = {
+        company: currentCompany ? {
+          name: currentCompany.name,
+          taxId: currentCompany.tax_id,
+          industry: currentCompany.industry,
+        } : undefined,
+        currentKPIs: {
+          revenue: 180000000,
+          expenses: 19800000,
+          taxBurden: 30.4,
+          cashFlow: 160200000,
+        }
+      };
+
+      // Call AI API
+      const response = await fetch('/api/ai/chat', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          message,
+          context
+        }),
+      });
+
+      const data = await response.json();
+
+      if (data.success && data.response) {
+        const aiMessage = {
+          id: (Date.now() + 1).toString(),
+          role: 'assistant',
+          content: data.response.message,
+          timestamp: new Date().toISOString(),
+          suggestions: data.response.suggestions,
+          actionItems: data.response.actionItems,
+          relatedTopics: data.response.relatedTopics,
+        };
+        
+        setMessages(prev => [...prev, aiMessage]);
+      } else {
+        // Use fallback response if API fails
+        const fallbackMessage = data.fallback?.message || 
+          'Disculpa, hubo un problema procesando tu consulta. Por favor intenta nuevamente.';
+        
+        const aiMessage = {
+          id: (Date.now() + 1).toString(),
+          role: 'assistant',
+          content: fallbackMessage,
+          timestamp: new Date().toISOString(),
+        };
+        
+        setMessages(prev => [...prev, aiMessage]);
+      }
+      
+    } catch (error) {
+      console.error('Error sending message:', error);
+      
+      // Error fallback
       const aiMessage = {
         id: (Date.now() + 1).toString(),
         role: 'assistant',
-        content: '¡Hola! Soy tu CFO virtual. Esta es una versión simplificada del chat. En la versión completa podré ayudarte con análisis financieros detallados, optimización fiscal y mucho más.',
+        content: 'Lo siento, hay un problema de conexión. El CFO virtual funciona mejor con OpenAI configurado. Mientras tanto, puedo ayudarte con consultas financieras básicas.',
         timestamp: new Date().toISOString(),
       };
       
       setMessages(prev => [...prev, aiMessage]);
-      setIsTyping(false);
-      setIsLoading(false);
-    }, 1000);
+      toast.error('Error de conexión con el AI CFO');
+    }
+    
+    setIsTyping(false);
+    setIsLoading(false);
   };
   
   const clearChat = () => {
@@ -273,6 +335,18 @@ export function CFOChatInterface({ className }: CFOChatInterfaceProps) {
                       <div className="text-sm whitespace-pre-wrap">
                         {message.content}
                       </div>
+                      
+                      {/* AI Message Enhancements */}
+                      {message.role === 'assistant' && (
+                        <MessageEnhancements
+                          suggestions={message.suggestions}
+                          actionItems={message.actionItems}
+                          relatedTopics={message.relatedTopics}
+                          onSuggestionClick={(suggestion) => sendMessage(suggestion)}
+                          onTopicClick={(topic) => sendMessage(`Cuéntame más sobre ${topic}`)}
+                        />
+                      )}
+                      
                       <div className="text-xs mt-2 opacity-70">
                         {formatTimestamp(message.timestamp)}
                       </div>
