@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<fe:Invoice xmlns:fe="urn:oasis:names:specification:ubl:schema:xsd:Invoice-2"
+            xmlns:cac="urn:oasis:names:specification:ubl:schema:xsd:CommonAggregateComponents-2"
+            xmlns:cbc="urn:oasis:names:specification:ubl:schema:xsd:CommonBasicComponents-2">
+
+    <!-- XML Malformado para testing de manejo de errores -->
+    <cbc:ID>ERROR-2024-001</cbc:ID>
+    <cbc:IssueDate>2024-12-15</cbc:IssueDate>
+    
+    <!-- Tag no cerrado intencionalmente -->
+    <cac:AccountingSupplierParty>
+        <cac:Party>
+            <cbc:Name>EMPRESA DE PRUEBA ERROR</cbc:Name>
+        <!-- Missing closing tags -->
+    
+    <!-- Datos incompletos -->
+    <cac:LegalMonetaryTotal>
+        <!-- Missing required fields -->
+    </cac:LegalMonetaryTotal>
+
+<!-- XML truncado intencionalmente para generar error -->
