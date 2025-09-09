@@ -208,9 +208,9 @@ export function FinancialDashboard({ className }: FinancialDashboardProps) {
                   Automatización
                 </p>
                 <p className="text-2xl font-bold">
-                  {formatPercentage(currentKPIs.automationRate)}
+                  {formatPercentage(mockKPIs.automationRate)}
                 </p>
-                <Progress value={currentKPIs.automationRate} className="w-full mt-2" />
+                <Progress value={mockKPIs.automationRate} className="w-full mt-2" />
               </div>
               <BarChart3 className="h-8 w-8 text-muted-foreground" />
             </div>
@@ -225,10 +225,10 @@ export function FinancialDashboard({ className }: FinancialDashboardProps) {
                   Carga Tributaria
                 </p>
                 <p className="text-2xl font-bold">
-                  {formatPercentage(currentKPIs.taxBurden)}
+                  {formatPercentage(mockKPIs.taxBurden)}
                 </p>
                 <div className="text-sm text-muted-foreground">
-                  {formatCurrency(currentMetrics.financial.taxes.total)} en impuestos
+                  {formatCurrency(mockMetrics.financial.taxes.total)} en impuestos
                 </div>
               </div>
               <PieChart className="h-8 w-8 text-muted-foreground" />
@@ -271,20 +271,20 @@ export function FinancialDashboard({ className }: FinancialDashboardProps) {
             <div className="space-y-4">
               <div className="flex justify-between">
                 <span className="text-sm text-muted-foreground">IVA</span>
-                <span className="font-semibold">{formatCurrency(currentMetrics.financial.taxes.iva)}</span>
+                <span className="font-semibold">{formatCurrency(mockMetrics.financial.taxes.iva)}</span>
               </div>
               <div className="flex justify-between">
                 <span className="text-sm text-muted-foreground">Retenciones</span>
-                <span className="font-semibold">{formatCurrency(currentMetrics.financial.taxes.retentions)}</span>
+                <span className="font-semibold">{formatCurrency(mockMetrics.financial.taxes.retentions)}</span>
               </div>
               <div className="flex justify-between">
                 <span className="text-sm text-muted-foreground">ICA</span>
-                <span className="font-semibold">{formatCurrency(currentMetrics.financial.taxes.ica)}</span>
+                <span className="font-semibold">{formatCurrency(mockMetrics.financial.taxes.ica)}</span>
               </div>
               <hr className="my-2" />
               <div className="flex justify-between">
                 <span className="text-sm font-medium">Total</span>
-                <span className="font-bold">{formatCurrency(currentMetrics.financial.taxes.total)}</span>
+                <span className="font-bold">{formatCurrency(mockMetrics.financial.taxes.total)}</span>
               </div>
             </div>
           </CardContent>
@@ -302,8 +302,8 @@ export function FinancialDashboard({ className }: FinancialDashboardProps) {
             <div className="flex justify-between items-center">
               <span className="text-sm font-medium">Flujo de Caja</span>
               <div className="text-right">
-                <div className={`font-semibold ${currentMetrics.financial.cashFlow.net >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                  {formatCurrency(currentMetrics.financial.cashFlow.net)}
+                <div className={`font-semibold ${mockMetrics.financial.cashFlow.net >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                  {formatCurrency(mockMetrics.financial.cashFlow.net)}
                 </div>
               </div>
             </div>
@@ -311,14 +311,14 @@ export function FinancialDashboard({ className }: FinancialDashboardProps) {
             <div className="flex justify-between items-center">
               <span className="text-sm font-medium">Promedio por Factura</span>
               <span className="font-semibold">
-                {formatCurrency(currentKPIs.avgInvoiceValue)}
+                {formatCurrency(mockKPIs.avgInvoiceValue)}
               </span>
             </div>
 
             <div className="flex justify-between items-center">
               <span className="text-sm font-medium">Crecimiento Mensual</span>
-              <Badge variant={currentMetrics.financial.revenue.growth >= 0 ? "default" : "destructive"}>
-                {formatPercentage(currentMetrics.financial.revenue.growth)}
+              <Badge variant={mockMetrics.financial.revenue.growth >= 0 ? "default" : "destructive"}>
+                {formatPercentage(mockMetrics.financial.revenue.growth)}
               </Badge>
             </div>
           </CardContent>
@@ -334,17 +334,17 @@ export function FinancialDashboard({ className }: FinancialDashboardProps) {
               <div className="flex justify-between items-center mb-2">
                 <span className="text-sm font-medium">Precisión de Clasificación</span>
                 <span className="font-semibold">
-                  {formatPercentage(currentKPIs.classificationAccuracy)}
+                  {formatPercentage(mockKPIs.classificationAccuracy)}
                 </span>
               </div>
-              <Progress value={currentKPIs.classificationAccuracy} />
+              <Progress value={mockKPIs.classificationAccuracy} />
             </div>
 
             <div>
               <div className="flex justify-between items-center mb-2">
                 <span className="text-sm font-medium">Tasa de Automatización</span>
                 <span className="font-semibold">
-                  {formatPercentage(currentKPIs.automationRate)}
+                  {formatPercentage(mockKPIs.automationRate)}
                 </span>
               </div>
               <Progress value={mockKPIs.automationRate} />
@@ -353,7 +353,7 @@ export function FinancialDashboard({ className }: FinancialDashboardProps) {
             <div className="flex justify-between items-center">
               <span className="text-sm font-medium">Tiempo Promedio</span>
               <span className="font-semibold">
-                {(currentKPIs.processingTime / 1000).toFixed(1)}s
+                {(mockKPIs.processingTime / 1000).toFixed(1)}s
               </span>
             </div>
           </CardContent>
@@ -366,7 +366,7 @@ export function FinancialDashboard({ className }: FinancialDashboardProps) {
           </CardHeader>
           <CardContent>
             <div className="space-y-3">
-              {currentMetrics.suppliers.top5.map((supplier, index) => (
+              {mockMetrics.suppliers.top5.map((supplier, index) => (
                 <div key={supplier.id} className="flex items-center justify-between">
                   <div className="flex items-center space-x-3">
                     <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center text-sm font-medium">

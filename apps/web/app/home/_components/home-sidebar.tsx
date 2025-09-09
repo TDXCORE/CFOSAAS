@@ -6,7 +6,7 @@ import {
   SidebarFooter,
   SidebarHeader,
   SidebarNavigation,
-} from '@kit/ui/shadcn-sidebar';
+} from '@kit/ui/sidebar';
 
 import { AppLogo } from '~/components/app-logo';
 import { CompanySelector } from '~/components/company-selector';
