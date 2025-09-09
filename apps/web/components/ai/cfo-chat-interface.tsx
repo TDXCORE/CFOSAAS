@@ -24,8 +24,6 @@ import {
   FileText
 } from 'lucide-react';
 import { useCurrentCompany } from '~/lib/companies/tenant-context';
-import { useCFOChat } from '~/lib/ai/use-cfo-chat';
-import { useDashboard } from '~/lib/hooks/use-dashboard';
 import { toast } from 'sonner';
 
 interface CFOChatInterfaceProps {
@@ -35,40 +33,53 @@ interface CFOChatInterfaceProps {
 export function CFOChatInterface({ className }: CFOChatInterfaceProps) {
   const currentCompany = useCurrentCompany();
   const [inputMessage, setInputMessage] = useState('');
+  const [messages, setMessages] = useState<any[]>([]);
+  const [isLoading, setIsLoading] = useState(false);
+  const [isTyping, setIsTyping] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   
-  // Get dashboard metrics for context
-  const { metrics, kpis, isLoading: metricsLoading } = useDashboard();
+  // Simple mock functions to replace the complex hooks
+  const sendMessage = async (message: string) => {
+    if (!message.trim()) return;
+    
+    const userMessage = {
+      id: Date.now().toString(),
+      role: 'user',
+      content: message,
+      timestamp: new Date().toISOString(),
+    };
+    
+    setMessages(prev => [...prev, userMessage]);
+    setIsLoading(true);
+    setIsTyping(true);
+    
+    // Simulate AI response
+    setTimeout(() => {
+      const aiMessage = {
+        id: (Date.now() + 1).toString(),
+        role: 'assistant',
+        content: '¡Hola! Soy tu CFO virtual. Esta es una versión simplificada del chat. En la versión completa podré ayudarte con análisis financieros detallados, optimización fiscal y mucho más.',
+        timestamp: new Date().toISOString(),
+      };
+      
+      setMessages(prev => [...prev, aiMessage]);
+      setIsTyping(false);
+      setIsLoading(false);
+    }, 1000);
+  };
   
-  // Initialize CFO chat
-  const {
-    messages,
-    isLoading,
-    isTyping,
-    sendMessage,
-    clearChat,
-    getProactiveInsights,
-    exportChat,
-  } = useCFOChat({
-    context: {
-      companyId: currentCompany?.id || '',
-      companyName: currentCompany?.name || '',
-      industry: currentCompany?.sector || undefined,
-      fiscalRegime: currentCompany?.fiscal_regime || undefined,
-    },
-    metrics: kpis ? {
-      totalInvoices: metrics?.overview.totalInvoices || 0,
-      pendingReview: metrics?.overview.pendingReview || 0,
-      processedToday: metrics?.overview.processedToday || 0,
-      totalAmountMonth: metrics?.financial.revenue.current || 0,
-      avgProcessingTime: metrics?.operations.processing.avgTime || 0,
-      classificationAccuracy: kpis.classificationAccuracy / 100,
-      manualReviewRate: kpis.manualReviewRate / 100,
-      totalIVA: metrics?.financial.taxes.iva || 0,
-      totalRetentions: metrics?.financial.taxes.retentions || 0,
-      totalICA: metrics?.financial.taxes.ica || 0,
-    } : undefined,
-  });
+  const clearChat = () => {
+    setMessages([]);
+    toast.success('Chat limpio');
+  };
+  
+  const getProactiveInsights = () => {
+    toast.info('Función de insights en desarrollo');
+  };
+  
+  const exportChat = () => {
+    return JSON.stringify(messages, null, 2);
+  };
 
   // Auto-scroll to bottom when new messages arrive
   useEffect(() => {
@@ -155,7 +166,7 @@ export function CFOChatInterface({ className }: CFOChatInterfaceProps) {
           </p>
         </div>
         <div className="flex items-center space-x-2">
-          <Button variant="outline" size="sm" onClick={getProactiveInsights} disabled={metricsLoading}>
+          <Button variant="outline" size="sm" onClick={getProactiveInsights}>
             <RefreshCw className="h-4 w-4 mr-2" />
             Obtener Insights
           </Button>

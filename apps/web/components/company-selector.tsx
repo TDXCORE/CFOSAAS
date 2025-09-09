@@ -19,7 +19,7 @@ import { Button } from '@kit/ui/button';
 import { Badge } from '@kit/ui/badge';
 import { Skeleton } from '@kit/ui/skeleton';
 import { useCompanySelectorData } from '~/lib/companies/tenant-context';
-import { CreateCompanyDialog } from './create-company-dialog';
+import { CreateCompanyDialog } from './create-company-dialog-simple';
 
 export function CompanySelector() {
   const [showCreateDialog, setShowCreateDialog] = useState(false);
