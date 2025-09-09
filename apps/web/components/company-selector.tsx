@@ -22,8 +22,23 @@ import { useCompanySelectorData } from '~/lib/companies/tenant-context';
 import { CreateCompanyDialog } from './create-company-dialog';
 
 export function CompanySelector() {
-  const { currentCompany, companies, switchCompany, isLoading } = useCompanySelectorData();
   const [showCreateDialog, setShowCreateDialog] = useState(false);
+  
+  // Safe data fetching with error handling
+  let selectorData;
+  try {
+    selectorData = useCompanySelectorData();
+  } catch (error) {
+    console.error('Error in CompanySelector data fetch:', error);
+    selectorData = {
+      currentCompany: null,
+      companies: [],
+      switchCompany: async () => {},
+      isLoading: false,
+    };
+  }
+  
+  const { currentCompany, companies, switchCompany, isLoading } = selectorData;
 
   if (isLoading) {
     return (
@@ -165,8 +180,23 @@ export function CompanySelector() {
 
 // Compact version for mobile/small spaces
 export function CompanySelectorCompact() {
-  const { currentCompany, companies, switchCompany, isLoading } = useCompanySelectorData();
   const [showCreateDialog, setShowCreateDialog] = useState(false);
+  
+  // Safe data fetching with error handling
+  let selectorData;
+  try {
+    selectorData = useCompanySelectorData();
+  } catch (error) {
+    console.error('Error in CompanySelectorCompact data fetch:', error);
+    selectorData = {
+      currentCompany: null,
+      companies: [],
+      switchCompany: async () => {},
+      isLoading: false,
+    };
+  }
+  
+  const { currentCompany, companies, switchCompany, isLoading } = selectorData;
 
   if (isLoading) {
     return <Skeleton className="h-8 w-8 rounded" />;

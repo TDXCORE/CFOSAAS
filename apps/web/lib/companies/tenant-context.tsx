@@ -25,6 +25,9 @@ export function TenantProvider({ children, initialCompanyId }: TenantProviderPro
   const [userPermissions, setUserPermissions] = useState<UserPermissions | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
+  // Error boundary protection
+  const [hasError, setHasError] = useState(false);
+
   // Load user companies on mount or user change
   const loadUserCompanies = useCallback(async () => {
     if (!user?.id) {
@@ -130,7 +133,13 @@ export function TenantProvider({ children, initialCompanyId }: TenantProviderPro
 
   // Load companies on user change
   useEffect(() => {
-    loadUserCompanies();
+    try {
+      loadUserCompanies();
+    } catch (error) {
+      console.error('Error in useEffect loadUserCompanies:', error);
+      setHasError(true);
+      setIsLoading(false);
+    }
   }, [loadUserCompanies]);
 
   // Restore company from localStorage on mount
@@ -153,6 +162,25 @@ export function TenantProvider({ children, initialCompanyId }: TenantProviderPro
     refreshCompanies,
   };
 
+  // If there's an error or no user, provide default context
+  if (hasError || !user) {
+    const fallbackContext: TenantContext = {
+      currentCompany: null,
+      userCompanies: [],
+      userRole: null,
+      userPermissions: null,
+      isLoading: false,
+      switchCompany: async () => {},
+      refreshCompanies: async () => {},
+    };
+    
+    return (
+      <TenantContextInstance.Provider value={fallbackContext}>
+        {children}
+      </TenantContextInstance.Provider>
+    );
+  }
+
   return (
     <TenantContextInstance.Provider value={contextValue}>
       {children}
@@ -164,7 +192,17 @@ export function TenantProvider({ children, initialCompanyId }: TenantProviderPro
 export function useTenant(): TenantContext {
   const context = useContext(TenantContextInstance);
   if (!context) {
-    throw new Error('useTenant must be used within a TenantProvider');
+    // Return fallback context instead of throwing error
+    console.warn('useTenant called outside TenantProvider, returning fallback context');
+    return {
+      currentCompany: null,
+      userCompanies: [],
+      userRole: null,
+      userPermissions: null,
+      isLoading: false,
+      switchCompany: async () => {},
+      refreshCompanies: async () => {},
+    };
   }
   return context;
 }
@@ -248,10 +286,15 @@ export function useCompanySelectorData() {
 
   useEffect(() => {
     const loadCompanies = async () => {
-      if (!user?.id) return;
-      
-      const { data } = await companiesService.getUserCompanies(user.id);
-      setCompanies(data);
+      try {
+        if (!user?.id) return;
+        
+        const { data } = await companiesService.getUserCompanies(user.id);
+        setCompanies(data || []);
+      } catch (error) {
+        console.error('Error loading companies for selector:', error);
+        setCompanies([]);
+      }
     };
 
     loadCompanies();
