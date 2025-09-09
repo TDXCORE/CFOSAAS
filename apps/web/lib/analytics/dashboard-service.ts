@@ -143,7 +143,7 @@ interface DashboardMetrics {
 
 class DashboardService {
   private supabase = getSupabaseClient();
-  private isDemoMode = true; // Temporal: forzar datos mock
+  private isDemoMode = false; // Usar datos reales de Supabase
 
   /**
    * Get comprehensive dashboard metrics for a company
@@ -275,7 +275,7 @@ class DashboardService {
       // Current month revenue
       const { data: currentInvoices } = await this.supabase
         .from('invoices')
-        .select('total_amount, total_tax, total_retention, taxes!inner(*)')
+        .select('total_amount, total_tax, total_retention')
         .eq('company_id', companyId)
         .gte('issue_date', currentMonth.toISOString().split('T')[0]);
 
@@ -299,17 +299,13 @@ class DashboardService {
         total: 0,
       };
 
-      // Calculate taxes from invoices if available
+      // Calculate taxes from invoices directly
       if (currentInvoices && currentInvoices.length > 0) {
         currentInvoices.forEach(invoice => {
-          if (invoice.taxes) {
-            taxes.iva += invoice.taxes.filter((t: any) => t.tax_type === 'IVA')
-              .reduce((sum: number, t: any) => sum + t.tax_amount, 0) || 0;
-            taxes.retentions += invoice.taxes.filter((t: any) => t.tax_type.includes('RETENCION'))
-              .reduce((sum: number, t: any) => sum + t.tax_amount, 0) || 0;
-            taxes.ica += invoice.taxes.filter((t: any) => t.tax_type === 'ICA')
-              .reduce((sum: number, t: any) => sum + t.tax_amount, 0) || 0;
-          }
+          // Use existing tax fields from invoices table
+          taxes.iva += invoice.total_tax || 0; // Assume total_tax is mostly IVA
+          taxes.retentions += invoice.total_retention || 0;
+          taxes.ica += 0; // ICA would need to be calculated separately or added as a field
         });
       }
 
