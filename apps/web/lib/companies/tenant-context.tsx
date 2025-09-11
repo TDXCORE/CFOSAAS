@@ -30,14 +30,17 @@ export function TenantProvider({ children, initialCompanyId }: TenantProviderPro
 
   // Load user companies on mount or user change
   const loadUserCompanies = useCallback(async () => {
-    if (!user?.id) {
+    const actualUser = user?.data || user;
+    const userId = actualUser?.id;
+    
+    if (!userId) {
       setIsLoading(false);
       return;
     }
 
     setIsLoading(true);
     try {
-      const { data: companies, error } = await companiesService.getUserCompanies(user.id);
+      const { data: companies, error } = await companiesService.getUserCompanies(userId);
       
       if (error) {
         console.error('Error loading companies:', error);
@@ -46,8 +49,8 @@ export function TenantProvider({ children, initialCompanyId }: TenantProviderPro
 
       // Convert companies to UserCompany format for context
       const userCompaniesData: UserCompany[] = companies.map(company => ({
-        id: `${user.id}-${company.id}`,
-        user_id: user.id,
+        id: `${userId}-${company.id}`,
+        user_id: userId,
         company_id: company.id,
         role: 'owner', // Will be fetched separately
         status: 'active',
@@ -75,18 +78,20 @@ export function TenantProvider({ children, initialCompanyId }: TenantProviderPro
     } finally {
       setIsLoading(false);
     }
-  }, [user?.id, initialCompanyId]);
+  }, [user?.data?.id || user?.id, initialCompanyId]);
 
   // Switch to a specific company and load permissions
   const switchToCompany = async (company: Company) => {
-    if (!user?.id) return;
+    const actualUser = user?.data || user;
+    const userId = actualUser?.id;
+    if (!userId) return;
 
     try {
       setIsLoading(true);
       
       // Get user role and permissions for this company
       const { role, permissions, error } = await companiesService.getUserCompanyRole(
-        user.id, 
+        userId, 
         company.id
       );
 
@@ -110,10 +115,12 @@ export function TenantProvider({ children, initialCompanyId }: TenantProviderPro
 
   // Switch company by ID
   const switchCompany = async (companyId: string) => {
-    if (!user?.id) return;
+    const actualUser = user?.data || user;
+    const userId = actualUser?.id;
+    if (!userId) return;
 
     try {
-      const { data: company, error } = await companiesService.getCompanyById(companyId, user.id);
+      const { data: company, error } = await companiesService.getCompanyById(companyId, userId);
       
       if (error || !company) {
         console.error('Error fetching company:', error);
@@ -146,11 +153,13 @@ export function TenantProvider({ children, initialCompanyId }: TenantProviderPro
   useEffect(() => {
     if (!isLoading && userCompanies.length > 0 && !currentCompany) {
       const savedCompanyId = localStorage.getItem('currentCompanyId');
-      if (savedCompanyId && user?.id) {
+      const actualUser = user?.data || user;
+      const userId = actualUser?.id;
+      if (savedCompanyId && userId) {
         switchCompany(savedCompanyId).catch(console.error);
       }
     }
-  }, [isLoading, userCompanies.length, currentCompany, user?.id]);
+  }, [isLoading, userCompanies.length, currentCompany, user?.data?.id || user?.id]);
 
   const contextValue: TenantContext = {
     currentCompany,
@@ -287,18 +296,29 @@ export function useCompanySelectorData() {
   useEffect(() => {
     const loadCompanies = async () => {
       try {
-        if (!user?.id) return;
+        const actualUser = user?.data || user;
+        const userId = actualUser?.id;
         
-        const { data } = await companiesService.getUserCompanies(user.id);
+        console.log('🔍 Loading companies for user:', userId);
+        console.log('🔐 Actual user object:', actualUser);
+        
+        if (!userId) {
+          console.log('❌ No user ID, skipping company load');
+          console.log('❓ User state:', { user, actualUser, userId });
+          return;
+        }
+        
+        const { data, error } = await companiesService.getUserCompanies(userId);
+        console.log('📊 Companies service response:', { data, error, count: data?.length });
         setCompanies(data || []);
       } catch (error) {
-        console.error('Error loading companies for selector:', error);
+        console.error('❌ Error loading companies for selector:', error);
         setCompanies([]);
       }
     };
 
     loadCompanies();
-  }, [user?.id, userCompanies]);
+  }, [user?.data?.id || user?.id, userCompanies]);
 
   return {
     currentCompany,

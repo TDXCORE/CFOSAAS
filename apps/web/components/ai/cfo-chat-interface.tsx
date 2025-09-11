@@ -218,7 +218,7 @@ export function CFOChatInterface({ className }: CFOChatInterfaceProps) {
   }
 
   return (
-    <div className={`space-y-6 ${className}`}>
+    <div className={`space-y-6 h-full ${className}`}>
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
@@ -243,7 +243,7 @@ export function CFOChatInterface({ className }: CFOChatInterfaceProps) {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-5 gap-6 h-full">
         {/* Quick Actions */}
         <div className="lg:col-span-1">
           <Card>
@@ -273,8 +273,8 @@ export function CFOChatInterface({ className }: CFOChatInterfaceProps) {
         </div>
 
         {/* Chat Interface */}
-        <div className="lg:col-span-3">
-          <Card className="h-[600px] flex flex-col">
+        <div className="lg:col-span-4">
+          <Card className="h-[calc(100vh-200px)] min-h-[700px] flex flex-col">
             <CardHeader className="flex-shrink-0">
               <div className="flex items-center justify-between">
                 <div className="flex items-center space-x-3">

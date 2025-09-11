@@ -10,14 +10,25 @@ import { invoiceStorage } from '~/lib/storage/invoice-storage';
 import { openaiService } from '~/lib/ai/openai-service';
 
 export async function POST(request: NextRequest) {
+  console.log('🚀 API ROUTE HIT: Invoice processing request received!');
   try {
+    console.log('🚀 Processing invoice upload request...');
+    
     // Parse form data
     const formData = await request.formData();
     const file = formData.get('file') as File;
     const companyId = formData.get('companyId') as string;
     
+    console.log('📄 File info:', {
+      name: file?.name,
+      type: file?.type,
+      size: file?.size,
+      companyId
+    });
+    
     // Validate input
     if (!file) {
+      console.error('❌ No file provided');
       return NextResponse.json(
         { error: 'No file provided' },
         { status: 400 }
@@ -25,14 +36,19 @@ export async function POST(request: NextRequest) {
     }
 
     if (!companyId) {
+      console.error('❌ Company ID is required');
       return NextResponse.json(
         { error: 'Company ID is required' },
         { status: 400 }
       );
     }
 
-    // Validate file type
-    if (!invoiceStorage.isValidFileType(file)) {
+    // Simple file type validation
+    const fileName = file.name.toLowerCase();
+    const isValidFile = fileName.endsWith('.xml') || fileName.endsWith('.pdf') || fileName.endsWith('.zip');
+    
+    if (!isValidFile) {
+      console.error('❌ Invalid file type:', fileName);
       return NextResponse.json(
         { error: 'Invalid file type. Only XML, PDF, and ZIP files are supported.' },
         { status: 400 }
@@ -75,19 +91,28 @@ export async function POST(request: NextRequest) {
 
       } else if (file.name.toLowerCase().endsWith('.xml')) {
         // Process single XML file
-        const content = await file.text();
-        const result = await processXMLContent(content, file.name, companyId);
-        processedFiles.push(result);
+        console.log('📝 Processing XML file...');
+        try {
+          const content = await file.text();
+          console.log('✅ File content loaded, length:', content.length);
+          
+          const result = await processXMLContent(content, file.name, companyId);
+          console.log('✅ XML processing result:', { success: result.success, fileName: result.fileName });
+          
+          processedFiles.push(result);
 
-        // Store the file
-        await invoiceStorage.uploadFile(file, {
-          originalName: file.name,
-          contentType: file.type,
-          size: file.size,
-          companyId,
-          fileType: 'xml',
-          invoiceId: result.invoice?.id,
-        });
+          // Skip file storage for now to isolate the issue
+          console.log('⚠️ Skipping file storage for debugging');
+          
+        } catch (xmlError) {
+          console.error('❌ Error processing XML:', xmlError);
+          processedFiles.push({
+            success: false,
+            fileName: file.name,
+            fileType: 'xml',
+            error: xmlError instanceof Error ? xmlError.message : 'Unknown XML processing error',
+          });
+        }
 
       } else if (file.name.toLowerCase().endsWith('.pdf')) {
         // For PDF files, store and mark for manual processing
@@ -167,15 +192,24 @@ async function processXMLContent(
   companyId: string
 ) {
   try {
+    console.log('🔍 Starting XML content processing...');
+    
     // Process XML with the Colombian processor
+    console.log('📊 Processing with XML processor...');
     const processingResult = await xmlProcessor.processXMLInvoice(xmlContent);
+    console.log('✅ XML processor result:', { 
+      hasInvoice: !!processingResult.invoice, 
+      hasError: !!processingResult.error,
+      validationErrorsCount: processingResult.validationErrors?.length || 0
+    });
 
     if (processingResult.error || !processingResult.invoice) {
+      console.error('❌ XML processing failed:', processingResult.error);
       return {
         success: false,
         fileName,
         fileType: 'xml',
-        error: processingResult.error,
+        error: processingResult.error || 'No invoice data extracted',
         validationErrors: processingResult.validationErrors,
         metadata: processingResult.metadata,
       };
@@ -187,57 +221,52 @@ async function processXMLContent(
       source_file_name: fileName,
       source_file_type: 'xml' as const,
     };
+    console.log('📋 Invoice data prepared:', {
+      invoiceNumber: invoiceData.invoice_number,
+      supplierName: invoiceData.supplier_name,
+      totalAmount: invoiceData.total_amount
+    });
 
     // Create invoice in database
+    console.log('💾 Creating invoice in database...');
     const createResult = await invoicesService.createInvoice(invoiceData, companyId);
+    console.log('✅ Database creation result:', { 
+      success: !createResult.error, 
+      hasData: !!createResult.data,
+      error: createResult.error 
+    });
 
     if (createResult.error || !createResult.data) {
+      console.error('❌ Database creation failed:', createResult.error);
       return {
         success: false,
         fileName,
         fileType: 'xml',
-        error: createResult.error,
+        error: createResult.error || 'Failed to create invoice in database',
         validationErrors: processingResult.validationErrors,
         metadata: processingResult.metadata,
       };
     }
 
-    // Auto-classify PUC if confidence is high enough
-    if (processingResult.metadata.extraction_confidence! > 0.8) {
-      await invoicesService.classifyInvoicePUC(createResult.data.id, companyId);
-    } else {
-      // Mark for manual review if confidence is low
-      await invoicesService.markForReview(
-        createResult.data.id,
-        companyId,
-        `Low extraction confidence: ${(processingResult.metadata.extraction_confidence! * 100).toFixed(1)}%`
-      );
-    }
-
-    // Generate AI analysis if OpenAI is available
-    let aiInsights;
+    // Classify invoice automatically using PUC classifier
+    console.log('🏷️ Attempting PUC classification...');
     try {
-      const analysisPrompt = `Analiza esta factura colombiana y proporciona insights clave:
-        
-Factura: ${invoiceData.invoice_number}
-Proveedor: ${invoiceData.supplier_name} (${invoiceData.supplier_tax_id})
-Valor: ${new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP' }).format(invoiceData.total_amount)}
-Fecha: ${invoiceData.issue_date}
-
-Productos/Servicios: ${invoiceData.line_items?.map(item => item.product_name).join(', ') || 'No especificados'}
-
-Proporciona:
-1. Clasificación sugerida del gasto
-2. Posibles optimizaciones fiscales
-3. Alertas o consideraciones importantes`;
-
-      const aiResponse = await openaiService.generateCFOResponse(analysisPrompt, {
-        company: { name: 'Current Company', taxId: companyId }
-      });
-
-      aiInsights = aiResponse.message;
-    } catch (aiError) {
-      console.log('AI analysis not available:', aiError);
+      const classificationResult = await invoicesService.classifyInvoicePUC(
+        createResult.data.id,
+        companyId
+      );
+      
+      if (classificationResult.success) {
+        console.log('✅ PUC classification successful:', {
+          puc_code: classificationResult.puc_code,
+          confidence: classificationResult.confidence
+        });
+      } else {
+        console.log('⚠️ PUC classification failed:', classificationResult.error);
+      }
+    } catch (classificationError) {
+      console.error('❌ Error during PUC classification:', classificationError);
+      // Continue without failing the entire operation
     }
 
     return {
@@ -246,15 +275,12 @@ Proporciona:
       fileType: 'xml',
       invoice: createResult.data,
       validationErrors: processingResult.validationErrors,
-      metadata: {
-        ...processingResult.metadata,
-        aiInsights,
-      },
+      metadata: processingResult.metadata,
       extractionConfidence: processingResult.metadata.extraction_confidence,
     };
 
   } catch (error) {
-    console.error('Error processing XML content:', error);
+    console.error('❌ Error processing XML content:', error);
     return {
       success: false,
       fileName,

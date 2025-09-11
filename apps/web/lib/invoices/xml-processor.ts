@@ -19,10 +19,15 @@ export class ColombianXMLProcessor {
   constructor() {
     this.xmlParser = new XMLParser({
       ignoreAttributes: false,
-      attributeNamePrefix: '',
-      textNodeName: '_text',
+      attributeNamePrefix: '@_',
+      textNodeName: '#text',
       parseAttributeValue: true,
       trimValues: true,
+      removeNSPrefix: true, // Remove namespace prefixes
+      parseTagValue: true,
+      parseTrueNumberOnly: false,
+      arrayMode: false,
+      allowBooleanAttributes: true,
     });
   }
 
@@ -49,8 +54,17 @@ export class ColombianXMLProcessor {
       const parsedXML = this.xmlParser.parse(xmlContent) as any;
       
       // Find invoice root (could be nested)
+      console.log('🔍 Parsed XML root keys:', Object.keys(parsedXML));
       const invoiceData = this.findInvoiceRoot(parsedXML);
+      
       if (!invoiceData) {
+        console.error('❌ No invoice root found. Available paths checked:');
+        console.error('parsedXML.Invoice:', !!parsedXML.Invoice);
+        console.error('parsedXML["fe:Invoice"]:', !!parsedXML['fe:Invoice']);
+        console.error('parsedXML["xmlns:Invoice"]:', !!parsedXML['xmlns:Invoice']);
+        console.error('parsedXML.Document?.Invoice:', !!parsedXML.Document?.Invoice);
+        console.error('parsedXML.UBLDocument?.Invoice:', !!parsedXML.UBLDocument?.Invoice);
+        
         return {
           invoice: null,
           metadata,
@@ -124,33 +138,111 @@ export class ColombianXMLProcessor {
    * Find the invoice root in the parsed XML
    */
   private findInvoiceRoot(parsedXML: any): ColombianXMLInvoice | null {
-    // Common UBL invoice root paths
+    console.log('🔍 Looking for Invoice root in keys:', Object.keys(parsedXML));
+    
+    // Check if this is an AttachedDocument with embedded invoice
+    if (parsedXML.AttachedDocument) {
+      console.log('📎 Found AttachedDocument, looking for embedded Invoice...');
+      const embeddedInvoice = this.extractEmbeddedInvoice(parsedXML.AttachedDocument);
+      if (embeddedInvoice) {
+        console.log('✅ Successfully extracted embedded Invoice from AttachedDocument');
+        return { Invoice: embeddedInvoice };
+      }
+    }
+    
+    // Standard invoice root paths
     const possiblePaths = [
       parsedXML.Invoice,
       parsedXML['fe:Invoice'],
       parsedXML['xmlns:Invoice'],
       parsedXML.Document?.Invoice,
       parsedXML.UBLDocument?.Invoice,
+      // Direct access for debugging
+      parsedXML,
     ];
 
-    for (const path of possiblePaths) {
+    for (let i = 0; i < possiblePaths.length; i++) {
+      const path = possiblePaths[i];
+      console.log(`🔍 Checking path ${i}:`, !!path, path ? Object.keys(path).slice(0, 5) : 'null');
+      
       if (path && this.isValidInvoiceStructure(path)) {
+        console.log('✅ Found valid invoice structure at path', i);
         return { Invoice: path };
       }
     }
 
+    console.log('❌ No valid invoice structure found in any path');
     return null;
+  }
+
+  /**
+   * Extract embedded invoice from AttachedDocument CDATA
+   */
+  private extractEmbeddedInvoice(attachedDoc: any): any | null {
+    try {
+      console.log('🔍 Extracting embedded invoice from AttachedDocument...');
+      
+      // Look for the CDATA content in Attachment > ExternalReference > Description
+      const description = attachedDoc.Attachment?.ExternalReference?.Description;
+      
+      if (!description || typeof description !== 'string') {
+        console.log('❌ No description found in AttachedDocument');
+        return null;
+      }
+
+      console.log('📄 Found CDATA content, length:', description.length);
+      
+      // The description contains the full Invoice XML as CDATA
+      // Extract the Invoice XML (it should start with <?xml and contain <Invoice>)
+      const invoiceXmlMatch = description.match(/<Invoice[^>]*>[\s\S]*<\/Invoice>/);
+      
+      if (!invoiceXmlMatch) {
+        console.log('❌ No Invoice XML found in CDATA');
+        return null;
+      }
+
+      const invoiceXml = invoiceXmlMatch[0];
+      console.log('✅ Extracted Invoice XML from CDATA, length:', invoiceXml.length);
+      
+      // Parse the extracted Invoice XML
+      const parsedInvoice = this.xmlParser.parse(invoiceXml);
+      console.log('✅ Parsed embedded Invoice, keys:', Object.keys(parsedInvoice));
+      
+      // Return the Invoice part
+      return parsedInvoice.Invoice || parsedInvoice;
+      
+    } catch (error) {
+      console.error('❌ Error extracting embedded invoice:', error);
+      return null;
+    }
   }
 
   /**
    * Check if the structure looks like a valid UBL invoice
    */
   private isValidInvoiceStructure(invoice: any): boolean {
+    console.log('🔍 Checking invoice structure. Keys:', Object.keys(invoice).slice(0, 10));
+    console.log('🔍 Looking for: ID, IssueDate, AccountingSupplierParty, LegalMonetaryTotal');
+    console.log('🔍 Found:', {
+      ID: !!invoice.ID,
+      IssueDate: !!invoice.IssueDate,
+      AccountingSupplierParty: !!invoice.AccountingSupplierParty,
+      LegalMonetaryTotal: !!invoice.LegalMonetaryTotal,
+      'cbc:ID': !!invoice['cbc:ID'],
+      'cbc:IssueDate': !!invoice['cbc:IssueDate'],
+      'cac:AccountingSupplierParty': !!invoice['cac:AccountingSupplierParty'],
+      'cac:LegalMonetaryTotal': !!invoice['cac:LegalMonetaryTotal']
+    });
+    
     return !!(
       invoice.ID ||
       invoice.IssueDate ||
       invoice.AccountingSupplierParty ||
-      invoice.LegalMonetaryTotal
+      invoice.LegalMonetaryTotal ||
+      invoice['cbc:ID'] ||
+      invoice['cbc:IssueDate'] ||
+      invoice['cac:AccountingSupplierParty'] ||
+      invoice['cac:LegalMonetaryTotal']
     );
   }
 
@@ -293,7 +385,11 @@ export class ColombianXMLProcessor {
       const result: CreateInvoiceInput = {
         invoice_number: invoiceNumber,
         document_type: 'invoice', // Could be extracted from document type code
-        issue_date: this.parseDate(issueDate),
+        issue_date: (() => {
+          const parsed = this.parseDate(issueDate);
+          console.log('💾 FINAL DATE TO SAVE:', parsed);
+          return parsed;
+        })(),
         due_date: dueDate ? this.parseDate(dueDate) : undefined,
         supplier_tax_id: this.cleanNIT(supplierTaxId),
         supplier_name: supplierName,
@@ -420,29 +516,56 @@ export class ColombianXMLProcessor {
   private parseAmount(amountObj: any): number {
     if (typeof amountObj === 'number') return amountObj;
     if (typeof amountObj === 'string') return parseFloat(amountObj) || 0;
+    if (amountObj?.['#text']) return parseFloat(amountObj['#text']) || 0;
     if (amountObj?._text) return parseFloat(amountObj._text) || 0;
     return 0;
   }
 
   private extractCurrency(amountObj: any): string | undefined {
+    if (amountObj?.['@_currencyID']) return amountObj['@_currencyID'];
     if (amountObj?.currencyID) return amountObj.currencyID;
     if (amountObj?.currency) return amountObj.currency;
     return undefined;
   }
 
   private parseDate(dateString: string): string {
+    console.log('🗓️ PARSING DATE:', dateString);
     try {
-      // Handle different date formats
-      const date = new Date(dateString);
-      return date.toISOString().split('T')[0]; // YYYY-MM-DD format
+      // Handle Colombian XML dates (YYYY-MM-DD format) - return as-is without conversion
+      if (/^\d{4}-\d{2}-\d{2}$/.test(dateString.trim())) {
+        const [year, month, day] = dateString.trim().split('-').map(Number);
+        // Validate date components
+        if (year >= 1900 && year <= 2100 && month >= 1 && month <= 12 && day >= 1 && day <= 31) {
+          // Return exactly as provided to avoid timezone issues
+          return dateString.trim();
+        }
+      }
+      
+      // For other formats, try to parse but avoid timezone conversion
+      try {
+        // Create date object but extract parts manually to avoid timezone shift
+        const date = new Date(dateString);
+        if (!isNaN(date.getTime())) {
+          const year = date.getFullYear();
+          const month = String(date.getMonth() + 1).padStart(2, '0');
+          const day = String(date.getDate()).padStart(2, '0');
+          return `${year}-${month}-${day}`;
+        }
+      } catch {
+        // Continue to fallback
+      }
+      
+      return dateString; // Return as-is if parsing fails
     } catch {
       return dateString; // Return as-is if parsing fails
     }
   }
 
-  private cleanNIT(nit: string): string {
-    // Remove any non-numeric characters from NIT
-    return nit.replace(/\D/g, '');
+  private cleanNIT(nit: any): string {
+    // Convert to string and remove any non-numeric characters from NIT
+    if (!nit) return '';
+    const nitStr = String(nit);
+    return nitStr.replace(/\D/g, '');
   }
 
   private isValidNIT(nit: string): boolean {
@@ -455,10 +578,10 @@ export class ColombianXMLProcessor {
     return !isNaN(date.getTime());
   }
 
-  private mapTaxSchemeToType(schemeId: string): 'IVA' | 'ICA' | 'RETENCION_FUENTE' | null {
+  private mapTaxSchemeToType(schemeId: any): 'IVA' | 'ICA' | 'RETENCION_FUENTE' | null {
     if (!schemeId) return null;
     
-    const id = schemeId.toLowerCase();
+    const id = String(schemeId).toLowerCase();
     
     // Common Colombian tax scheme IDs
     if (id.includes('iva') || id === '01') return 'IVA';

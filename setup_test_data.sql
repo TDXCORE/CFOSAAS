@@ -43,12 +43,12 @@ INSERT INTO public.companies (
   '901234567-1',
   'common',
   '6201',
-  'Actividades de programaciÛn inform·tica',
+  'Actividades de programaci√≥n inform√°tica',
   'services',
   'small',
   'CO',
   'Cundinamarca',
-  'Bogot·'
+  'Bogot√°'
 ) ON CONFLICT (id) DO NOTHING;
 
 -- Create the user-company relationship

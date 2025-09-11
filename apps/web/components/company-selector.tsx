@@ -55,15 +55,9 @@ export function CompanySelector() {
 
   if (!currentCompany) {
     return (
-      <Button
-        onClick={() => setShowCreateDialog(true)}
-        variant="outline"
-        size="sm"
-        className="flex items-center space-x-2"
-      >
-        <Plus className="h-4 w-4" />
-        <span>Create Company</span>
-      </Button>
+      <div className="text-sm text-muted-foreground">
+        No company selected
+      </div>
     );
   }
 
@@ -157,15 +151,6 @@ export function CompanySelector() {
             </DropdownMenuItem>
           ))}
           
-          <DropdownMenuSeparator />
-          
-          <DropdownMenuItem
-            onClick={() => setShowCreateDialog(true)}
-            className="flex items-center space-x-2 p-3 cursor-pointer text-primary"
-          >
-            <Plus className="h-4 w-4" />
-            <span>Create New Company</span>
-          </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>
 
@@ -204,13 +189,9 @@ export function CompanySelectorCompact() {
 
   if (!currentCompany) {
     return (
-      <Button
-        onClick={() => setShowCreateDialog(true)}
-        variant="outline"
-        size="sm"
-      >
-        <Plus className="h-4 w-4" />
-      </Button>
+      <div className="text-xs text-muted-foreground">
+        No company
+      </div>
     );
   }
 
@@ -255,14 +236,6 @@ export function CompanySelectorCompact() {
             </DropdownMenuItem>
           ))}
           
-          <DropdownMenuSeparator />
-          <DropdownMenuItem
-            onClick={() => setShowCreateDialog(true)}
-            className="text-primary"
-          >
-            <Plus className="h-4 w-4 mr-2" />
-            Create Company
-          </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>
 

@@ -3,7 +3,7 @@
  * Handles file uploads, storage, and retrieval for invoice attachments
  */
 
-import { createBrowserClient } from '@supabase/ssr';
+import { getSupabaseClient } from '../supabase/client-singleton';
 
 type FileUploadResult = {
   success: boolean;
@@ -22,10 +22,7 @@ type FileMetadata = {
 };
 
 class InvoiceStorageService {
-  private supabase = createBrowserClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-  );
+  private supabase = getSupabaseClient();
 
   private readonly BUCKET_NAME = 'invoice-files';
   private readonly MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB

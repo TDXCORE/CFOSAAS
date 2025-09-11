@@ -81,27 +81,34 @@ export function InvoiceUpload({
 
         try {
           // Call the new processing API
+          console.log('📤 Preparing to upload file:', file.name, 'for company:', currentCompany.id);
           const formData = new FormData();
           formData.append('file', file);
           formData.append('companyId', currentCompany.id);
 
+          console.log('📡 Making request to /api/invoices/process');
           const response = await fetch('/api/invoices/process', {
             method: 'POST',
             body: formData,
           });
+          console.log('📥 Response received:', response.status, response.statusText);
 
           const result = await response.json();
+          console.log('📄 Response JSON:', result);
 
-          if (!response.ok || !result.success) {
+          if (!response.ok) {
             throw new Error(result.error || 'Processing failed');
           }
+
+          // Continue processing even if result.success is false - check individual results
 
           // Handle the response based on file type
           if (result.results && result.results.length > 0) {
             const fileResult = result.results[0];
+            const isDuplicate = fileResult.error?.includes('already exists');
             
-            if (fileResult.success) {
-              // Success - extract invoice IDs
+            if (fileResult.success || isDuplicate) {
+              // Success or duplicate - extract invoice IDs
               if (fileResult.invoice?.id) {
                 processedInvoiceIds.push(fileResult.invoice.id);
               }
@@ -113,18 +120,36 @@ export function InvoiceUpload({
                   progress: 100,
                   invoice_id: fileResult.invoice?.id || fileResult.fileName,
                   metadata: fileResult.metadata,
-                  aiInsights: fileResult.metadata?.aiInsights
+                  aiInsights: fileResult.metadata?.aiInsights,
+                  warning: isDuplicate ? 'Invoice already exists' : undefined
                 } : f
               ));
 
-              // Show AI insights if available
-              if (fileResult.metadata?.aiInsights) {
+              // Show appropriate message
+              if (isDuplicate) {
+                toast.warning('Invoice already exists in the system');
+              } else if (fileResult.metadata?.aiInsights) {
                 toast.success(`File processed successfully! AI insights: ${fileResult.metadata.aiInsights.slice(0, 100)}...`);
+              } else {
+                toast.success('File processed successfully!');
               }
 
             } else {
-              // Processing failed
-              throw new Error(fileResult.error || 'Processing failed');
+              // Processing failed - but check if it's a known issue we can handle
+              if (fileResult.error?.includes('already exists')) {
+                // Handle duplicate gracefully
+                setUploadFiles(prev => prev.map((f, idx) => 
+                  idx === i ? { 
+                    ...f, 
+                    status: 'completed', 
+                    progress: 100,
+                    warning: 'Invoice already exists'
+                  } : f
+                ));
+                toast.warning('Invoice already exists in the system');
+              } else {
+                throw new Error(fileResult.error || 'Processing failed');
+              }
             }
           } else {
             throw new Error('No processing results returned');

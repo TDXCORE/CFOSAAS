@@ -23,54 +23,51 @@ class CompaniesService {
    */
   async getUserCompanies(userId: string): Promise<CompaniesResponse> {
     try {
+      console.log('🚀 Companies Service: getUserCompanies called for user:', userId);
       await simulateApiDelay(500);
       
-      const { data, error } = await this.supabase
+      // First get user companies
+      console.log('📡 Step 1: Getting user companies...');
+      const { data: userCompanies, error: userCompaniesError } = await this.supabase
         .from('user_companies')
-        .select(`
-          *,
-          companies:company_id (
-            id,
-            name,
-            legal_name,
-            tax_id,
-            fiscal_regime,
-            economic_activity_code,
-            economic_activity_name,
-            sector,
-            company_size,
-            country,
-            department,
-            city,
-            address,
-            settings,
-            tax_settings,
-            integration_settings,
-            subscription_plan,
-            subscription_status,
-            trial_ends_at,
-            created_at,
-            updated_at,
-            deleted_at
-          )
-        `)
+        .select('company_id')
         .eq('user_id', userId)
-        .eq('status', 'active')
-        .is('companies.deleted_at', null);
+        .eq('status', 'active');
 
-      if (error || !data || data.length === 0) {
-        console.warn('No companies found in database, using mock data:', error?.message);
-        // Return mock companies for development/demo
+      console.log('📊 User companies response:', { userCompanies, userCompaniesError });
+
+      if (userCompaniesError || !userCompanies || userCompanies.length === 0) {
+        console.warn('⚠️  No user companies found, using mock data:', userCompaniesError?.message);
         const mockCompanies = generateMockCompanies(userId);
+        console.log('🎭 Generated mock companies:', mockCompanies.length);
         return { data: mockCompanies, count: mockCompanies.length };
       }
 
-      // Transform data to extract companies
-      const companies = data?.map((item: any) => item.companies).filter(Boolean) || [];
-      
+      // Get company IDs
+      const companyIds = userCompanies.map(uc => uc.company_id);
+      console.log('🔍 Company IDs to fetch:', companyIds);
+
+      // Then get companies data
+      console.log('📡 Step 2: Getting companies data...');
+      const { data: companies, error: companiesError } = await this.supabase
+        .from('companies')
+        .select('*')
+        .in('id', companyIds)
+        .is('deleted_at', null);
+
+      console.log('📊 Companies response:', { companies, companiesError, count: companies?.length });
+
+      if (companiesError || !companies || companies.length === 0) {
+        console.warn('⚠️  No companies data found, using mock data:', companiesError?.message);
+        const mockCompanies = generateMockCompanies(userId);
+        console.log('🎭 Generated mock companies:', mockCompanies.length);
+        return { data: mockCompanies, count: mockCompanies.length };
+      }
+
+      console.log('✅ Real companies found:', companies.length);
       return { data: companies as Company[], count: companies.length };
     } catch (error) {
-      console.warn('Error in getUserCompanies, using mock data:', error);
+      console.warn('❌ Error in getUserCompanies, using mock data:', error);
       const mockCompanies = generateMockCompanies(userId);
       return { data: mockCompanies, count: mockCompanies.length };
     }

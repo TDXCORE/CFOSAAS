@@ -1,12 +1,12 @@
 import { 
-  Home, 
   User, 
   BarChart3, 
   FileText, 
   Upload, 
   MessageSquare, 
   Building,
-  PieChart 
+  PieChart,
+  Settings2
 } from 'lucide-react';
 import { z } from 'zod';
 
@@ -17,17 +17,6 @@ import pathsConfig from '~/config/paths.config';
 const iconClasses = 'w-4';
 
 const routes = [
-  {
-    label: 'common:routes.application',
-    children: [
-      {
-        label: 'common:routes.home',
-        path: pathsConfig.app.home,
-        Icon: <Home className={iconClasses} />,
-        end: true,
-      },
-    ],
-  },
   {
     label: 'CFO SaaS',
     children: [
@@ -55,6 +44,11 @@ const routes = [
         label: 'Empresas',
         path: pathsConfig.app.companies,
         Icon: <Building className={iconClasses} />,
+      },
+      {
+        label: 'Integraciones',
+        path: '/home/integrations',
+        Icon: <Settings2 className={iconClasses} />,
       },
     ],
   },
