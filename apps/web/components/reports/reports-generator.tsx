@@ -35,6 +35,7 @@ import { useCurrentCompany } from '~/lib/companies/tenant-context';
 import { reportsService, type ReportTemplate } from '~/lib/reports/reports-service';
 import type { InvoiceFilters, ExportOptions } from '~/lib/invoices/types';
 import { toast } from 'sonner';
+import { useSupabase } from '@kit/supabase/hooks/use-supabase';
 
 interface ReportsGeneratorProps {
   className?: string;
@@ -42,13 +43,18 @@ interface ReportsGeneratorProps {
 
 export function ReportsGenerator({ className }: ReportsGeneratorProps) {
   const currentCompany = useCurrentCompany();
+  const supabase = useSupabase();
+  
+  // Set authenticated supabase client on reports service
+  reportsService.setSupabaseClient(supabase);
+  
   
   const [selectedTemplate, setSelectedTemplate] = useState<ReportTemplate | null>(null);
   const [isGenerating, setIsGenerating] = useState(false);
   const [reportData, setReportData] = useState<any[] | null>(null);
   const [filters, setFilters] = useState<InvoiceFilters>({
-    date_from: new Date(new Date().setMonth(new Date().getMonth() - 1)).toISOString().split('T')[0],
-    date_to: new Date().toISOString().split('T')[0],
+    date_from: '2024-01-01',
+    date_to: '2025-12-31',
   });
   const [exportFormat, setExportFormat] = useState<'csv' | 'excel' | 'json'>('csv');
 

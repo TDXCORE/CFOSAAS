@@ -3,7 +3,7 @@
  * Generate various reports for Colombian tax and accounting purposes
  */
 
-import { createClient } from '@supabase/supabase-js';
+import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 import type { InvoiceFilters, ExportOptions, ExportResult } from '~/lib/invoices/types';
 
 interface ReportTemplate {
@@ -80,6 +80,11 @@ class ReportsService {
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
   );
+
+  // Method overloads to accept external supabase client
+  setSupabaseClient(supabase: SupabaseClient) {
+    this.supabase = supabase;
+  }
 
   /**
    * Get available report templates
@@ -158,6 +163,11 @@ class ReportsService {
     companyId: string,
     filters: InvoiceFilters = {}
   ): Promise<DetailedInvoiceReport[]> {
+    // Check if this is a mock company
+    if (companyId.startsWith('mock-company-')) {
+      return this.generateMockInvoiceReport(companyId, filters);
+    }
+
     let query = this.supabase
       .from('invoices')
       .select(`
@@ -176,10 +186,7 @@ class ReportsService {
         processing_status,
         source_file_type,
         manual_review_required,
-        created_at,
-        puc_accounts (
-          name
-        )
+        created_at
       `)
       .eq('company_id', companyId);
 
@@ -232,15 +239,36 @@ class ReportsService {
 
     query = query.order('issue_date', { ascending: false });
 
-    const { data, error } = await query;
+    const { data: invoices, error } = await query;
 
     if (error) {
       throw new Error(`Error generating report: ${error.message}`);
     }
 
-    return (data || []).map(invoice => ({
+    if (!invoices || invoices.length === 0) {
+      return [];
+    }
+
+    // Get PUC names separately to avoid JOIN issues
+    const pucCodes = [...new Set(invoices.map(inv => inv.puc_code).filter(Boolean))];
+    let pucMap = new Map<string, string>();
+
+    if (pucCodes.length > 0) {
+      const { data: pucAccounts } = await this.supabase
+        .from('puc_accounts')
+        .select('code, name')
+        .in('code', pucCodes);
+
+      if (pucAccounts) {
+        pucAccounts.forEach(puc => {
+          pucMap.set(puc.code, puc.name);
+        });
+      }
+    }
+
+    return invoices.map(invoice => ({
       ...invoice,
-      puc_name: invoice.puc_accounts?.name || '',
+      puc_name: invoice.puc_code ? (pucMap.get(invoice.puc_code) || '') : '',
     }));
   }
 
@@ -252,17 +280,20 @@ class ReportsService {
     dateFrom: string,
     dateTo: string
   ): Promise<TaxSummaryReport[]> {
+    // Check if this is a mock company
+    if (companyId.startsWith('mock-company-')) {
+      return this.generateMockTaxSummaryReport(companyId, dateFrom, dateTo);
+    }
+
+    // Get invoices first
     const { data: invoices, error } = await this.supabase
       .from('invoices')
       .select(`
+        id,
         issue_date,
         total_amount,
         total_tax,
-        total_retention,
-        taxes (
-          tax_type,
-          tax_amount
-        )
+        total_retention
       `)
       .eq('company_id', companyId)
       .gte('issue_date', dateFrom)
@@ -273,6 +304,32 @@ class ReportsService {
       throw new Error(`Error generating tax summary: ${error.message}`);
     }
 
+    if (!invoices || invoices.length === 0) {
+      return [];
+    }
+
+    // Get tax details separately
+    const invoiceIds = invoices.map(inv => inv.id);
+    let taxData: any[] = [];
+
+    if (invoiceIds.length > 0) {
+      const { data: taxes } = await this.supabase
+        .from('invoice_taxes')
+        .select('invoice_id, tax_type, tax_amount')
+        .in('invoice_id', invoiceIds);
+      
+      taxData = taxes || [];
+    }
+
+    // Create tax map by invoice
+    const taxMap = new Map<string, any[]>();
+    taxData.forEach(tax => {
+      if (!taxMap.has(tax.invoice_id)) {
+        taxMap.set(tax.invoice_id, []);
+      }
+      taxMap.get(tax.invoice_id)!.push(tax);
+    });
+
     // Group by month
     const monthlyData = new Map<string, {
       total_invoices: number;
@@ -282,7 +339,7 @@ class ReportsService {
       total_ica: number;
     }>();
 
-    (invoices || []).forEach(invoice => {
+    invoices.forEach(invoice => {
       const monthKey = invoice.issue_date.substring(0, 7); // YYYY-MM
       
       if (!monthlyData.has(monthKey)) {
@@ -299,24 +356,23 @@ class ReportsService {
       monthData.total_invoices++;
       monthData.total_amount += invoice.total_amount || 0;
       
-      // Calculate tax breakdown
-      if (invoice.taxes) {
-        invoice.taxes.forEach(tax => {
-          switch (tax.tax_type) {
-            case 'IVA':
-              monthData.total_iva += tax.tax_amount;
-              break;
-            case 'RETENCION_FUENTE':
-            case 'RETENCION_IVA':
-            case 'RETENCION_ICA':
-              monthData.total_retentions += tax.tax_amount;
-              break;
-            case 'ICA':
-              monthData.total_ica += tax.tax_amount;
-              break;
-          }
-        });
-      }
+      // Calculate tax breakdown from separate tax data
+      const invoiceTaxes = taxMap.get(invoice.id) || [];
+      invoiceTaxes.forEach(tax => {
+        switch (tax.tax_type) {
+          case 'IVA':
+            monthData.total_iva += tax.tax_amount;
+            break;
+          case 'RETENCION_FUENTE':
+          case 'RETENCION_IVA':
+          case 'RETENCION_ICA':
+            monthData.total_retentions += tax.tax_amount;
+            break;
+          case 'ICA':
+            monthData.total_ica += tax.tax_amount;
+            break;
+        }
+      });
     });
 
     return Array.from(monthlyData.entries()).map(([period, data]) => {
@@ -341,6 +397,11 @@ class ReportsService {
     companyId: string,
     filters: InvoiceFilters = {}
   ): Promise<SupplierReport[]> {
+    // Check if this is a mock company
+    if (companyId.startsWith('mock-company-')) {
+      return this.generateMockSupplierReport(companyId, filters);
+    }
+
     let query = this.supabase
       .from('invoices')
       .select(`
@@ -433,16 +494,18 @@ class ReportsService {
     companyId: string,
     filters: InvoiceFilters = {}
   ): Promise<PUCClassificationReport[]> {
+    // Check if this is a mock company
+    if (companyId.startsWith('mock-company-')) {
+      return this.generateMockPUCReport(companyId, filters);
+    }
+
     const { data: invoices, error } = await this.supabase
       .from('invoices')
       .select(`
         puc_code,
         total_amount,
         account_classification_confidence,
-        manual_review_required,
-        puc_accounts (
-          name
-        )
+        manual_review_required
       `)
       .eq('company_id', companyId)
       .eq('status', 'validated')
@@ -452,7 +515,28 @@ class ReportsService {
       throw new Error(`Error generating PUC report: ${error.message}`);
     }
 
-    const totalAmount = (invoices || []).reduce((sum, inv) => sum + (inv.total_amount || 0), 0);
+    if (!invoices || invoices.length === 0) {
+      return [];
+    }
+
+    const totalAmount = invoices.reduce((sum, inv) => sum + (inv.total_amount || 0), 0);
+
+    // Get PUC names separately
+    const pucCodes = [...new Set(invoices.map(inv => inv.puc_code).filter(Boolean))];
+    let pucNamesMap = new Map<string, string>();
+
+    if (pucCodes.length > 0) {
+      const { data: pucAccounts } = await this.supabase
+        .from('puc_accounts')
+        .select('code, name')
+        .in('code', pucCodes);
+
+      if (pucAccounts) {
+        pucAccounts.forEach(puc => {
+          pucNamesMap.set(puc.code, puc.name);
+        });
+      }
+    }
 
     // Group by PUC code
     const pucMap = new Map<string, {
@@ -463,12 +547,12 @@ class ReportsService {
       manual_reviews: number;
     }>();
 
-    (invoices || []).forEach(invoice => {
+    invoices.forEach(invoice => {
       const key = invoice.puc_code!;
       
       if (!pucMap.has(key)) {
         pucMap.set(key, {
-          puc_name: invoice.puc_accounts?.name || 'Sin descripción',
+          puc_name: pucNamesMap.get(key) || 'Sin descripción',
           invoices: [],
           total_amount: 0,
           confidences: [],
@@ -618,6 +702,287 @@ class ReportsService {
         typeof cell === 'string' && cell.includes(',') ? `"${cell}"` : cell
       ).join(',')
     ).join('\n');
+  }
+
+  /**
+   * Generate mock invoice data for demo/testing purposes
+   */
+  private generateMockInvoiceReport(companyId: string, filters: InvoiceFilters = {}): DetailedInvoiceReport[] {
+    const mockInvoices: DetailedInvoiceReport[] = [
+      {
+        invoice_number: 'FACT-2024-001',
+        issue_date: '2024-01-15',
+        due_date: '2024-02-15',
+        supplier_name: 'Proveedor Principal S.A.S',
+        supplier_tax_id: '900123456-1',
+        customer_name: 'Mi Empresa SAS',
+        subtotal: 5000000,
+        total_tax: 950000,
+        total_retention: 125000,
+        total_amount: 5825000,
+        puc_code: '5135',
+        puc_name: 'Servicios',
+        status: 'validated',
+        processing_status: 'calculated',
+        source_file_type: 'xml',
+        manual_review_required: false,
+        created_at: '2024-01-15T10:30:00Z'
+      },
+      {
+        invoice_number: 'FACT-2024-002',
+        issue_date: '2024-01-16',
+        due_date: '2024-02-16',
+        supplier_name: 'Distribuciones Colombia Ltda',
+        supplier_tax_id: '800987654-2',
+        customer_name: 'Mi Empresa SAS',
+        subtotal: 3200000,
+        total_tax: 608000,
+        total_retention: 80000,
+        total_amount: 3728000,
+        puc_code: '4135',
+        puc_name: 'Comercio al por mayor y al por menor',
+        status: 'validated',
+        processing_status: 'calculated',
+        source_file_type: 'xml',
+        manual_review_required: false,
+        created_at: '2024-01-16T14:22:00Z'
+      },
+      {
+        invoice_number: 'FACT-2024-003',
+        issue_date: '2024-01-17',
+        due_date: '2024-02-17',
+        supplier_name: 'Suministros Bogotá',
+        supplier_tax_id: '700456789-3',
+        customer_name: 'Mi Empresa SAS',
+        subtotal: 1800000,
+        total_tax: 342000,
+        total_retention: 45000,
+        total_amount: 2097000,
+        puc_code: '5145',
+        puc_name: 'Mantenimiento y Reparaciones',
+        status: 'validated',
+        processing_status: 'calculated',
+        source_file_type: 'pdf',
+        manual_review_required: true,
+        created_at: '2024-01-17T09:15:00Z'
+      },
+      {
+        invoice_number: 'FACT-2024-004',
+        issue_date: '2024-01-18',
+        due_date: '2024-02-18',
+        supplier_name: 'Comercializadora Andina',
+        supplier_tax_id: '600321987-4',
+        customer_name: 'Mi Empresa SAS',
+        subtotal: 2400000,
+        total_tax: 456000,
+        total_retention: 60000,
+        total_amount: 2796000,
+        puc_code: '5110',
+        puc_name: 'Honorarios',
+        status: 'validated',
+        processing_status: 'calculated',
+        source_file_type: 'xml',
+        manual_review_required: false,
+        created_at: '2024-01-18T16:45:00Z'
+      },
+      {
+        invoice_number: 'FACT-2024-005',
+        issue_date: '2024-01-19',
+        due_date: '2024-02-19',
+        supplier_name: 'Importadora del Valle',
+        supplier_tax_id: '500654321-5',
+        customer_name: 'Mi Empresa SAS',
+        subtotal: 4200000,
+        total_tax: 798000,
+        total_retention: 105000,
+        total_amount: 4893000,
+        puc_code: '1528',
+        puc_name: 'Equipo de computación y comunicación',
+        status: 'pending',
+        processing_status: 'classified',
+        source_file_type: 'xml',
+        manual_review_required: false,
+        created_at: '2024-01-19T11:30:00Z'
+      },
+      {
+        invoice_number: 'FACT-2024-006',
+        issue_date: '2024-01-20',
+        due_date: '2024-02-20',
+        supplier_name: 'Servicios Profesionales CO',
+        supplier_tax_id: '400789123-6',
+        customer_name: 'Mi Empresa SAS',
+        subtotal: 6500000,
+        total_tax: 1235000,
+        total_retention: 162500,
+        total_amount: 7572500,
+        puc_code: '5110',
+        puc_name: 'Honorarios',
+        status: 'validated',
+        processing_status: 'calculated',
+        source_file_type: 'xml',
+        manual_review_required: false,
+        created_at: '2024-01-20T13:20:00Z'
+      }
+    ];
+
+    // Apply basic filters
+    let filteredInvoices = mockInvoices;
+
+    if (filters.status?.length) {
+      filteredInvoices = filteredInvoices.filter(inv => filters.status!.includes(inv.status));
+    }
+
+    if (filters.supplier_tax_id) {
+      filteredInvoices = filteredInvoices.filter(inv => inv.supplier_tax_id === filters.supplier_tax_id);
+    }
+
+    if (filters.date_from) {
+      filteredInvoices = filteredInvoices.filter(inv => inv.issue_date >= filters.date_from!);
+    }
+
+    if (filters.date_to) {
+      filteredInvoices = filteredInvoices.filter(inv => inv.issue_date <= filters.date_to!);
+    }
+
+    if (filters.requires_review !== undefined) {
+      filteredInvoices = filteredInvoices.filter(inv => inv.manual_review_required === filters.requires_review);
+    }
+
+    return filteredInvoices;
+  }
+
+  /**
+   * Generate mock supplier analysis report
+   */
+  private generateMockSupplierReport(companyId: string, filters: InvoiceFilters = {}): SupplierReport[] {
+    return [
+      {
+        supplier_tax_id: '900123456-1',
+        supplier_name: 'Proveedor Principal S.A.S',
+        total_invoices: 8,
+        total_amount: 12500000,
+        avg_invoice_value: 1562500,
+        total_taxes: 2375000,
+        last_invoice_date: '2024-01-20',
+        first_invoice_date: '2024-01-15',
+        classification_accuracy: 95.5,
+      },
+      {
+        supplier_tax_id: '800987654-2',
+        supplier_name: 'Distribuciones Colombia Ltda',
+        total_invoices: 5,
+        total_amount: 8200000,
+        avg_invoice_value: 1640000,
+        total_taxes: 1558000,
+        last_invoice_date: '2024-01-18',
+        first_invoice_date: '2024-01-16',
+        classification_accuracy: 87.2,
+      },
+      {
+        supplier_tax_id: '700456789-3',
+        supplier_name: 'Suministros Bogotá',
+        total_invoices: 3,
+        total_amount: 4300000,
+        avg_invoice_value: 1433333,
+        total_taxes: 817000,
+        last_invoice_date: '2024-01-17',
+        first_invoice_date: '2024-01-17',
+        classification_accuracy: 92.8,
+      }
+    ];
+  }
+
+  /**
+   * Generate mock PUC classification report
+   */
+  private generateMockPUCReport(companyId: string, filters: InvoiceFilters = {}): PUCClassificationReport[] {
+    const totalAmount = 25000000; // Total amount for percentage calculations
+
+    return [
+      {
+        puc_code: '5135',
+        puc_name: 'Servicios',
+        invoice_count: 12,
+        total_amount: 8500000,
+        percentage_of_total: 34.0,
+        avg_confidence: 92.5,
+        manual_review_count: 1,
+      },
+      {
+        puc_code: '4135',
+        puc_name: 'Comercio al por mayor y al por menor',
+        invoice_count: 8,
+        total_amount: 6200000,
+        percentage_of_total: 24.8,
+        avg_confidence: 88.3,
+        manual_review_count: 0,
+      },
+      {
+        puc_code: '5110',
+        puc_name: 'Honorarios',
+        invoice_count: 6,
+        total_amount: 5800000,
+        percentage_of_total: 23.2,
+        avg_confidence: 95.1,
+        manual_review_count: 0,
+      },
+      {
+        puc_code: '5145',
+        puc_name: 'Mantenimiento y Reparaciones',
+        invoice_count: 4,
+        total_amount: 2900000,
+        percentage_of_total: 11.6,
+        avg_confidence: 89.7,
+        manual_review_count: 2,
+      },
+      {
+        puc_code: '1528',
+        puc_name: 'Equipo de computación y comunicación',
+        invoice_count: 2,
+        total_amount: 1600000,
+        percentage_of_total: 6.4,
+        avg_confidence: 91.2,
+        manual_review_count: 0,
+      }
+    ];
+  }
+
+  /**
+   * Generate mock tax summary report
+   */
+  private generateMockTaxSummaryReport(companyId: string, dateFrom: string, dateTo: string): TaxSummaryReport[] {
+    return [
+      {
+        period: '2024-01',
+        total_invoices: 32,
+        total_amount: 25000000,
+        total_iva: 4750000,
+        total_retentions: 625000,
+        total_ica: 100000,
+        net_amount: 24375000,
+        tax_burden_percentage: 21.9,
+      },
+      {
+        period: '2024-02',
+        total_invoices: 28,
+        total_amount: 22500000,
+        total_iva: 4275000,
+        total_retentions: 562500,
+        total_ica: 90000,
+        net_amount: 21937500,
+        tax_burden_percentage: 21.9,
+      },
+      {
+        period: '2024-03',
+        total_invoices: 35,
+        total_amount: 28200000,
+        total_iva: 5358000,
+        total_retentions: 705000,
+        total_ica: 112800,
+        net_amount: 27495000,
+        tax_burden_percentage: 21.9,
+      }
+    ];
   }
 }
 
