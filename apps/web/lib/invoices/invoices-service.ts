@@ -212,6 +212,12 @@ class InvoicesService {
       }
 
       // Create taxes if provided
+      console.log('💰 Creating taxes for invoice:', {
+        hasTaxes: !!input.taxes?.length,
+        taxCount: input.taxes?.length || 0,
+        taxes: input.taxes
+      });
+      
       if (input.taxes?.length) {
         const taxesData = input.taxes.map(tax => ({
           ...tax,
@@ -219,14 +225,20 @@ class InvoicesService {
           company_id: companyId,
         }));
 
+        console.log('💰 Inserting taxes into database:', taxesData);
+
         const { error: taxesError } = await serviceClient
           .from('invoice_taxes')
           .insert(taxesData);
 
         if (taxesError) {
-          console.error('Error creating taxes:', taxesError);
+          console.error('❌ Error creating taxes:', taxesError);
           // Continue without failing the entire operation
+        } else {
+          console.log('✅ Successfully created taxes:', taxesData.length);
         }
+      } else {
+        console.log('⚠️ No taxes provided to create');
       }
 
       // Return the invoice with the known data instead of fetching

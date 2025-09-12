@@ -1,3 +1,5 @@
+'use client';
+
 import type { User } from '@supabase/supabase-js';
 
 import {
@@ -6,6 +8,7 @@ import {
   SidebarFooter,
   SidebarHeader,
   SidebarNavigation,
+  useSidebar,
 } from '@kit/ui/shadcn-sidebar';
 
 import { AppLogo } from '~/components/app-logo';
@@ -14,6 +17,21 @@ import { ProfileAccountDropdownContainer } from '~/components/personal-account-d
 import { navigationConfig } from '~/config/navigation.config';
 import { Tables } from '~/lib/database.types';
 
+function CollapsibleLogo() {
+  const { state } = useSidebar();
+  const isCollapsed = state === 'collapsed';
+
+  if (isCollapsed) {
+    return (
+      <div className="w-8 h-8 bg-primary rounded-lg flex items-center justify-center flex-shrink-0">
+        <span className="text-white text-sm font-bold">N</span>
+      </div>
+    );
+  }
+
+  return <AppLogo className={'max-w-full'} />;
+}
+
 export function HomeSidebar(props: {
   account?: Tables<'accounts'>;
   user: User;
@@ -21,10 +39,8 @@ export function HomeSidebar(props: {
   return (
     <Sidebar collapsible={'icon'}>
         <SidebarHeader className={'h-16 justify-center'}>
-          <div className={'flex items-center justify-between space-x-2'}>
-            <div>
-              <AppLogo className={'max-w-full'} />
-            </div>
+          <div className={'flex items-center justify-center'}>
+            <CollapsibleLogo />
           </div>
         </SidebarHeader>
 

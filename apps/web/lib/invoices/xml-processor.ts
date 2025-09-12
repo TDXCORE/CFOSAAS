@@ -359,16 +359,35 @@ export class ColombianXMLProcessor {
       // Extract detailed tax information
       const taxes: CreateInvoiceTaxInput[] = [];
       
-      taxTotals.forEach(taxTotal => {
+      console.log('💰 Extracting tax information...');
+      console.log('💰 TaxTotals found:', taxTotals.length);
+      
+      taxTotals.forEach((taxTotal, taxIndex) => {
+        console.log(`💰 Processing TaxTotal ${taxIndex}:`, {
+          taxAmount: taxTotal.TaxAmount,
+          hasSubtotals: !!taxTotal.TaxSubtotal
+        });
+        
         const taxSubtotals = Array.isArray(taxTotal.TaxSubtotal) ?
           taxTotal.TaxSubtotal : [taxTotal.TaxSubtotal].filter(Boolean);
         
-        taxSubtotals.forEach(subtotal => {
+        console.log(`💰 TaxSubtotals found: ${taxSubtotals.length}`);
+        
+        taxSubtotals.forEach((subtotal, subIndex) => {
           const taxScheme = subtotal.TaxCategory?.TaxScheme;
-          const taxType = this.mapTaxSchemeToType(taxScheme?.ID || taxScheme?.Name);
+          const schemeId = taxScheme?.ID || taxScheme?.Name;
+          const taxType = this.mapTaxSchemeToType(schemeId);
+          
+          console.log(`💰 Processing TaxSubtotal ${subIndex}:`, {
+            schemeId,
+            taxType,
+            taxableAmount: subtotal.TaxableAmount,
+            taxAmount: subtotal.TaxAmount,
+            percent: subtotal.TaxCategory?.Percent
+          });
           
           if (taxType) {
-            taxes.push({
+            const taxRecord = {
               tax_type: taxType,
               taxable_base: this.parseAmount(subtotal.TaxableAmount) || 0,
               tax_rate: subtotal.TaxCategory?.Percent ? 
@@ -377,9 +396,19 @@ export class ColombianXMLProcessor {
               dian_code: taxScheme?.ID,
               calculation_method: 'automatic',
               applied_rule: `xml_extracted_${taxType}`,
-            });
+            };
+            
+            console.log('💰 Adding tax record:', taxRecord);
+            taxes.push(taxRecord);
+          } else {
+            console.log('⚠️ Tax type not recognized for scheme:', schemeId);
           }
         });
+      });
+      
+      console.log(`💰 Total tax records extracted: ${taxes.length}`);
+      taxes.forEach((tax, index) => {
+        console.log(`💰 Tax ${index}:`, tax);
       });
 
       const result: CreateInvoiceInput = {

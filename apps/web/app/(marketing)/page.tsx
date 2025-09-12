@@ -22,20 +22,20 @@ function Home() {
       <div className={'container mx-auto'}>
         <Hero
           pill={
-            <Pill label={'New'}>
-              <span>The leading SaaS Starter Kit for ambitious developers</span>
+            <Pill label={'Nuevo'}>
+              <span>Plataforma AI CFO para PYMES en Colombia</span>
             </Pill>
           }
           title={
             <>
-              <span>The ultimate SaaS Starter</span>
-              <span>for your next project</span>
+              <span>Tu CFO Virtual Experto</span>
+              <span>para automatizar finanzas</span>
             </>
           }
           subtitle={
             <span>
-              Build and Ship a SaaS faster than ever before with the next-gen
-              SaaS Starter Kit. Ship your SaaS in days, not months.
+              Democratiza herramientas financieras avanzadas con IA. Procesa facturas,
+              calcula impuestos y recibe asesoría estratégica para tu PYME en Colombia.
             </span>
           }
           cta={<MainCallToActionButton />}
@@ -62,47 +62,47 @@ function Home() {
             heading={
               <>
                 <b className="font-semibold dark:text-white">
-                  The ultimate SaaS Starter Kit
+                  Asistencia Financiera Inteligente
                 </b>
                 .{' '}
                 <span className="text-muted-foreground font-normal">
-                  Unleash your creativity and build your SaaS faster than ever
-                  with Makerkit.
+                  Automatiza tu contabilidad y recibe asesoría experta con IA
+                  especializada en normativa colombiana.
                 </span>
               </>
             }
             icon={
               <FeatureShowcaseIconContainer>
                 <LayoutDashboard className="h-5" />
-                <span>All-in-one solution</span>
+                <span>Solución Integral</span>
               </FeatureShowcaseIconContainer>
             }
           >
             <FeatureGrid>
               <FeatureCard
                 className={'relative col-span-2 overflow-hidden'}
-                label={'Beautiful Dashboard'}
-                description={`Makerkit provides a beautiful dashboard to manage your SaaS business.`}
+                label={'Dashboard Financiero'}
+                description={`NPJ proporciona un dashboard completo para gestionar las finanzas de tu PYME con KPIs específicos para Colombia.`}
               />
 
               <FeatureCard
                 className={
                   'relative col-span-2 w-full overflow-hidden lg:col-span-1'
                 }
-                label={'Authentication'}
-                description={`Makerkit provides a variety of providers to allow your users to sign in.`}
+                label={'Procesamiento Automático'}
+                description={`NPJ procesa automáticamente facturas XML desde tu email O365/Outlook con clasificación PUC inteligente.`}
               />
 
               <FeatureCard
                 className={'relative col-span-2 overflow-hidden lg:col-span-1'}
-                label={'Multi Tenancy'}
-                description={`Multi tenant memberships for your SaaS business.`}
+                label={'AI CFO Experto'}
+                description={`Asesoría financiera inteligente con 15+ años de experiencia en normativa tributaria colombiana.`}
               />
 
               <FeatureCard
                 className={'relative col-span-2 overflow-hidden'}
-                label={'Billing'}
-                description={`Makerkit supports multiple payment gateways to charge your customers.`}
+                label={'Motor Tributario Colombia'}
+                description={`NPJ calcula automáticamente IVA, retenciones, ICA y genera reportes DIAN-compliant para tu empresa.`}
               />
             </FeatureGrid>
           </FeatureShowcase>
