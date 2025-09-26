@@ -61,8 +61,8 @@ export interface TaxCalculationResult {
 }
 
 export class ColombianTaxEngine {
-  // 2024 UVT value (updated annually)
-  private readonly UVT_2024 = 47065;
+  // 2025 UVT value (updated annually)
+  private readonly UVT_2025 = 49799;
 
   // IVA rates by product/service type
   private readonly IVA_RATES: Record<string, number> = {
@@ -72,75 +72,112 @@ export class ColombianTaxEngine {
     'exempt': 0.00,
   };
 
-  // Retention thresholds and rates (in UVT)
-  private readonly RETENTION_RULES = {
-    services: {
-      threshold_uvt: 4, // 4 UVT
-      rates: {
-        natural_person: 0.10,
-        company: 0.11,
-      },
-      dian_concept: '365 - Servicios en general',
-    },
-    professional: {
+  // Retention concepts and rates 2025 (Colombia)
+  private readonly RETENTION_CONCEPTS = {
+    'servicios_generales': {
+      code: '365',
       threshold_uvt: 4,
       rates: {
-        natural_person: 0.10,
-        company: 0.11,
+        natural_person: { declarante: 0.04, no_declarante: 0.06 },
+        company: 0.06
       },
-      dian_concept: '365 - Servicios profesionales',
+      description: 'Servicios en general'
     },
-    construction: {
+    'servicios_profesionales': {
+      code: '365',
       threshold_uvt: 4,
       rates: {
-        natural_person: 0.035,
-        company: 0.04,
+        natural_person: { declarante: 0.11, no_declarante: 0.11 },
+        company: 0.11
       },
-      dian_concept: '373 - Construcción',
+      description: 'Servicios profesionales'
     },
-    goods: {
-      threshold_uvt: 27, // 27 UVT
+    'honorarios': {
+      code: '329',
+      threshold_uvt: 4,
       rates: {
-        natural_person: 0.025,
-        company: 0.025,
+        natural_person: { declarante: 0.11, no_declarante: 0.10 },
+        company: 0.11
       },
-      dian_concept: '366 - Compra de bienes',
+      description: 'Honorarios'
     },
-    rent: {
+    'compras_bienes': {
+      code: '366',
       threshold_uvt: 27,
       rates: {
-        natural_person: 0.035,
-        company: 0.035,
+        natural_person: { declarante: 0.025, no_declarante: 0.035 },
+        company: 0.025
       },
-      dian_concept: '370 - Arrendamiento',
+      description: 'Compra de bienes'
     },
-    transport: {
+    'arrendamiento': {
+      code: '370',
+      threshold_uvt: 27,
+      rates: {
+        natural_person: { declarante: 0.035, no_declarante: 0.035 },
+        company: 0.035
+      },
+      description: 'Arrendamiento'
+    },
+    'transporte': {
+      code: '371',
       threshold_uvt: 4,
       rates: {
-        natural_person: 0.035,
-        company: 0.035,
+        natural_person: { declarante: 0.035, no_declarante: 0.035 },
+        company: 0.035
       },
-      dian_concept: '371 - Transporte',
+      description: 'Transporte de carga'
     },
+    'rendimientos_financieros': {
+      code: '330',
+      threshold_uvt: 0, // Aplica desde $1
+      rates: {
+        natural_person: { declarante: 0.07, no_declarante: 0.07 },
+        company: 0.07
+      },
+      description: 'Rendimientos financieros'
+    }
   };
 
-  // ICA rates by municipality (per mil)
-  private readonly ICA_RATES: Record<string, number> = {
-    'Bogotá': 0.00414,
-    'Medellín': 0.007,
-    'Cali': 0.00414,
-    'Barranquilla': 0.007,
-    'Cartagena': 0.008,
-    'Bucaramanga': 0.007,
-    'Pereira': 0.008,
-    'Santa Marta': 0.007,
-    'Ibagué': 0.007,
-    'Pasto': 0.008,
-    'Manizales': 0.008,
-    'Neiva': 0.009,
-    'Villavicencio': 0.007,
-    'Armenia': 0.009,
-    'Popayán': 0.010,
+  // RETEICA rates by municipality 2025 (per mil)
+  private readonly RETEICA_RATES: Record<string, any> = {
+    'Bogotá': {
+      services: {
+        group_304: 0.00966, // Otros servicios
+        group_302: 0.0069,  // Consultoría
+        group_401: 0.014    // Financieras
+      },
+      commerce: {
+        general: 0.00414,
+        group_203: 0.0138   // Cigarrillos, licores, combustibles
+      },
+      industrial: {
+        group_101: 0.00414
+      },
+      minimum_threshold_uvt: 4, // 4 UVT servicios, 27 UVT compras
+      minimum_amounts: {
+        services: 4,  // UVT
+        commerce: 27  // UVT
+      }
+    },
+    'Medellín': {
+      services: { general: 0.007 },
+      commerce: { general: 0.007 },
+      industrial: { general: 0.005 },
+      minimum_threshold_uvt: 15
+    },
+    'Cali': {
+      services: { general: 0.00414 },
+      commerce: { general: 0.00414 },
+      industrial: { general: 0.003 },
+      minimum_threshold_uvt: 3
+    },
+    'Bucaramanga': {
+      services: { general: 0.007 },
+      commerce: { general: 0.007 },
+      industrial: { general: 0.005 },
+      minimum_threshold_uvt: 25
+    }
   };
 
   /**
@@ -270,7 +307,7 @@ export class ColombianTaxEngine {
   }
 
   /**
-   * Calculate Retención en la Fuente (Source Withholding)
+   * Calculate Retención en la Fuente (Source Withholding) - Updated 2025
    */
   private calculateRetencionFuente(context: InvoiceTaxContext) {
     const { supplier, customer, service_type, invoice_amount } = context;
@@ -285,42 +322,60 @@ export class ColombianTaxEngine {
       };
     }
 
-    // Get retention rule for service type
-    const rule = this.RETENTION_RULES[service_type];
-    if (!rule) {
+    // Map service type to retention concept
+    const conceptMapping: Record<string, string> = {
+      'services': 'servicios_generales',
+      'professional': 'servicios_profesionales',
+      'goods': 'compras_bienes',
+      'rent': 'arrendamiento',
+      'transport': 'transporte',
+      'construction': 'servicios_generales' // Default to general services
+    };
+
+    const conceptKey = conceptMapping[service_type] || 'servicios_generales';
+    const concept = this.RETENTION_CONCEPTS[conceptKey];
+
+    if (!concept) {
       return {
         applicable: false,
         rate: 0,
         amount: 0,
-        rule_applied: 'service_type_not_covered',
+        rule_applied: 'concept_not_found',
       };
     }
 
     // Check if amount exceeds threshold
-    const threshold = rule.threshold_uvt * this.UVT_2024;
+    const threshold = concept.threshold_uvt * this.UVT_2025;
     if (invoice_amount < threshold) {
       return {
         applicable: false,
         rate: 0,
         amount: 0,
-        base_uvt: rule.threshold_uvt,
+        base_uvt: concept.threshold_uvt,
         rule_applied: 'below_threshold',
-        dian_concept: rule.dian_concept,
+        dian_concept: `${concept.code} - ${concept.description}`,
       };
     }
 
-    // Determine rate based on supplier type
-    const rate = supplier.entity_type === 'natural_person' 
-      ? rule.rates.natural_person 
-      : rule.rates.company;
+    // Determine rate based on supplier type and declarant status
+    let rate: number;
+    if (supplier.entity_type === 'natural_person') {
+      // For natural persons, check if they are declarant (simplified logic)
+      const isDeclarant = this.isDeclarantTaxpayer(supplier.tax_id);
+      rate = isDeclarant
+        ? concept.rates.natural_person.declarante
+        : concept.rates.natural_person.no_declarante;
+    } else {
+      rate = concept.rates.company;
+    }
 
     return {
       applicable: true,
       rate,
       amount: invoice_amount * rate,
-      base_uvt: rule.threshold_uvt,
-      rule_applied: `${service_type}_${supplier.entity_type}`,
-      dian_concept: rule.dian_concept,
+      base_uvt: concept.threshold_uvt,
+      rule_applied: `${conceptKey}_${supplier.entity_type}`,
+      dian_concept: `${concept.code} - ${concept.description}`,
     };
   }
 
@@ -351,7 +406,7 @@ export class ColombianTaxEngine {
     }
 
     // IVA retention threshold is typically 4 UVT (same as services)
-    const threshold = 4 * this.UVT_2024;
+    const threshold = 4 * this.UVT_2025;
     if (invoice_amount < threshold) {
       return {
         applicable: false,
@@ -373,43 +428,86 @@ export class ColombianTaxEngine {
   }
 
   /**
-   * Calculate ICA (Industry and Commerce Tax)
+   * Calculate RETEICA (ICA Withholding) - Updated 2025
    */
   private calculateICA(context: InvoiceTaxContext) {
-    const { supplier, municipality, invoice_amount } = context;
+    const { supplier, customer, municipality, invoice_amount, service_type } = context;
 
-    // ICA only applies to certain activities and locations
-    if (!supplier.is_ica_subject || !municipality) {
+    // RETEICA only applies if customer is retention agent and supplier is ICA subject
+    if (!customer.retention_agent || !supplier.is_ica_subject || !municipality) {
       return {
         applicable: false,
         rate: 0,
         amount: 0,
         municipality: municipality || '',
-        rule_applied: 'not_ica_subject',
+        rule_applied: 'not_applicable_reteica',
       };
     }
 
-    // Get ICA rate for municipality
-    const rate = this.ICA_RATES[municipality];
+    // Get RETEICA configuration for municipality
+    const municipalityConfig = this.RETEICA_RATES[municipality];
+    if (!municipalityConfig) {
+      return {
+        applicable: false,
+        rate: 0,
+        amount: 0,
+        municipality,
+        rule_applied: 'municipality_not_configured',
+      };
+    }
+
+    // Determine activity type and get appropriate rate
+    let rate: number;
+    let activityType: string;
+
+    switch (service_type) {
+      case 'services':
+      case 'professional':
+        activityType = 'services';
+        // For Bogotá, use specific service groups
+        if (municipality === 'Bogotá' && municipalityConfig.services.group_304) {
+          rate = municipalityConfig.services.group_304; // Default to "otros servicios"
+        } else {
+          rate = municipalityConfig.services.general || municipalityConfig.services;
+        }
+        break;
+      case 'goods':
+        activityType = 'commerce';
+        rate = municipalityConfig.commerce.general || municipalityConfig.commerce;
+        break;
+      case 'construction':
+      case 'transport':
+        activityType = 'services';
+        rate = municipalityConfig.services.general || municipalityConfig.services;
+        break;
+      default:
+        activityType = 'services';
+        rate = municipalityConfig.services.general || municipalityConfig.services;
+    }
+
     if (!rate) {
       return {
         applicable: false,
         rate: 0,
         amount: 0,
         municipality,
-        rule_applied: 'municipality_rate_not_found',
+        rule_applied: 'rate_not_found',
       };
     }
 
-    // ICA typically has a minimum threshold
-    const minimum_threshold = 5 * this.UVT_2024; // 5 UVT
+    // Check minimum threshold
+    const thresholdUVT = municipalityConfig.minimum_amounts
+      ? municipalityConfig.minimum_amounts[activityType]
+      : municipalityConfig.minimum_threshold_uvt;
+
+    const minimum_threshold = thresholdUVT * this.UVT_2025;
     if (invoice_amount < minimum_threshold) {
       return {
         applicable: false,
         rate: 0,
         amount: 0,
         municipality,
-        rule_applied: 'below_ica_threshold',
+        rule_applied: 'below_reteica_threshold',
       };
     }
 
@@ -418,7 +516,7 @@ export class ColombianTaxEngine {
       rate,
       amount: invoice_amount * rate,
       municipality,
-      rule_applied: `ica_${municipality.toLowerCase().replace(/\s+/g, '_')}`,
+      rule_applied: `reteica_${municipality.toLowerCase().replace(/\s+/g, '_')}_${activityType}`,
     };
   }
 
@@ -455,24 +553,69 @@ export class ColombianTaxEngine {
   }
 
   /**
-   * Get current UVT value
+   * Get current UVT value (2025)
    */
   getCurrentUVT(): number {
-    return this.UVT_2024;
+    return this.UVT_2025;
   }
 
   /**
-   * Get ICA rate for a municipality
+   * Determine if taxpayer is declarant (simplified logic)
    */
-  getICARate(municipality: string): number {
-    return this.ICA_RATES[municipality] || 0;
+  private isDeclarantTaxpayer(taxId: string): boolean {
+    // Simplified logic: companies are generally declarant
+    // Natural persons: check if tax_id length suggests company (9+ digits) vs person (8-10 digits)
+    // This is a simplified approach - in production, this should query a proper database
+    const cleanTaxId = taxId.replace(/[^0-9]/g, '');
+
+    // Companies (NIT) usually have 9+ digits and are declarant
+    if (cleanTaxId.length >= 9) {
+      return true;
+    }
+
+    // For natural persons, we assume non-declarant unless they have high income
+    // This should be determined by proper validation against DIAN records
+    return false;
   }
 
   /**
-   * Get retention rules for a service type
+   * Get RETEICA rates for a municipality
    */
-  getRetentionRules(serviceType: string) {
-    return this.RETENTION_RULES[serviceType as keyof typeof this.RETENTION_RULES];
+  getRETEICARate(municipality: string, activityType: string = 'services'): number {
+    const config = this.RETEICA_RATES[municipality];
+    if (!config) return 0;
+
+    switch (activityType) {
+      case 'services':
+        return config.services?.general || config.services || 0;
+      case 'commerce':
+        return config.commerce?.general || config.commerce || 0;
+      case 'industrial':
+        return config.industrial?.general || config.industrial || 0;
+      default:
+        return 0;
+    }
+  }
+
+  /**
+   * Get all RETEICA configurations
+   */
+  getAllRETEICAConfigs() {
+    return this.RETEICA_RATES;
+  }
+
+  /**
+   * Get retention concept for a service type
+   */
+  getRetentionConcept(conceptKey: string) {
+    return this.RETENTION_CONCEPTS[conceptKey as keyof typeof this.RETENTION_CONCEPTS];
+  }
+
+  /**
+   * Get all available retention concepts
+   */
+  getAllRetentionConcepts() {
+    return this.RETENTION_CONCEPTS;
   }
 
   /**

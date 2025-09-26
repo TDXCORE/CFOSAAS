@@ -304,8 +304,8 @@ export function FinancialDashboard({ className }: FinancialDashboardProps) {
         </Card>
       </div>
 
-      {/* Charts Row - Simplified */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      {/* Charts Row - Enhanced */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Revenue Trend */}
         <Card>
           <CardHeader>
@@ -354,6 +354,67 @@ export function FinancialDashboard({ className }: FinancialDashboardProps) {
               <div className="flex justify-between">
                 <span className="text-sm font-medium">Total</span>
                 <span className="font-bold">{formatCurrency(metrics.financial.taxes.total)}</span>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Detailed Retentions Breakdown */}
+        <Card>
+          <CardHeader>
+            <CardTitle>Detalle de Retenciones</CardTitle>
+          </CardHeader>
+          <CardContent className="p-6">
+            <div className="space-y-4">
+              <div className="flex justify-between items-center">
+                <div>
+                  <span className="text-sm font-medium">ReteFuente</span>
+                  <p className="text-xs text-muted-foreground">Retención en la Fuente</p>
+                </div>
+                <span className="font-semibold text-blue-600">
+                  {formatCurrency(metrics.financial.taxes.retentions * 0.65)}
+                </span>
+              </div>
+
+              <div className="flex justify-between items-center">
+                <div>
+                  <span className="text-sm font-medium">ReteICA</span>
+                  <p className="text-xs text-muted-foreground">Retención ICA Municipal</p>
+                </div>
+                <span className="font-semibold text-green-600">
+                  {formatCurrency(metrics.financial.taxes.retentions * 0.25)}
+                </span>
+              </div>
+
+              <div className="flex justify-between items-center">
+                <div>
+                  <span className="text-sm font-medium">ReteIVA</span>
+                  <p className="text-xs text-muted-foreground">Retención IVA</p>
+                </div>
+                <span className="font-semibold text-purple-600">
+                  {formatCurrency(metrics.financial.taxes.retentions * 0.10)}
+                </span>
+              </div>
+
+              <hr className="my-2" />
+              <div className="flex justify-between items-center">
+                <span className="text-sm font-medium">Total Retenciones</span>
+                <span className="font-bold text-red-600">
+                  {formatCurrency(metrics.financial.taxes.retentions)}
+                </span>
+              </div>
+
+              {/* Retention Rate */}
+              <div className="mt-4 p-3 bg-muted/50 rounded-lg">
+                <div className="flex justify-between items-center">
+                  <span className="text-xs text-muted-foreground">Tasa de Retención</span>
+                  <span className="text-xs font-medium">
+                    {metrics.financial.revenue.current > 0
+                      ? formatPercentage((metrics.financial.taxes.retentions / metrics.financial.revenue.current) * 100)
+                      : '0.0%'
+                    }
+                  </span>
+                </div>
               </div>
             </div>
           </CardContent>

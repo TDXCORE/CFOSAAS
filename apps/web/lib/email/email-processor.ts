@@ -7,6 +7,7 @@
 import { invoiceStorage } from '~/lib/storage/invoice-storage';
 import { xmlProcessor } from '~/lib/invoices/xml-processor';
 import { invoicesService } from '~/lib/invoices/invoices-service';
+import { retentionService } from '~/lib/taxes/retention-service';
 import type { CreateInvoiceInput } from '~/lib/invoices/types';
 
 interface EmailAttachment {
@@ -374,6 +375,19 @@ class EmailProcessorService {
           if (invoice) {
             result.invoicesProcessed = 1;
             result.invoiceIds.push(invoice.id);
+
+            // Process retentions for the new invoice
+            try {
+              await retentionService.processInvoiceRetentions(
+                invoice,
+                companyId,
+                undefined // Use default company entity as customer
+              );
+              console.log(`Enhanced retentions processed for invoice ${invoice.id}`);
+            } catch (retentionError) {
+              console.warn(`Retention processing failed for invoice ${invoice.id}:`, retentionError);
+              // Don't fail the entire process for retention errors
+            }
           } else {
             result.errors.push(error || 'Failed to save XML invoice');
           }
@@ -416,6 +430,19 @@ class EmailProcessorService {
                   if (invoice) {
                     result.invoicesProcessed++;
                     result.invoiceIds.push(invoice.id);
+
+                    // Process retentions for the new invoice from ZIP
+                    try {
+                      await retentionService.processInvoiceRetentions(
+                        invoice,
+                        companyId,
+                        undefined // Use default company entity as customer
+                      );
+                      console.log(`Enhanced retentions processed for ZIP invoice ${invoice.id}`);
+                    } catch (retentionError) {
+                      console.warn(`Retention processing failed for ZIP invoice ${invoice.id}:`, retentionError);
+                      // Don't fail the entire process for retention errors
+                    }
                   }
                 }
               } catch (error) {

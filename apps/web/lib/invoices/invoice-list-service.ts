@@ -47,6 +47,7 @@ class InvoiceListService {
           supplier_tax_id,
           subtotal,
           total_tax,
+          total_retention,
           total_amount,
           status,
           processing_status,
@@ -95,6 +96,15 @@ class InvoiceListService {
 
       // Get paginated results
       const offset = (page - 1) * limit;
+      console.log('📄 Pagination query:', {
+        page,
+        limit,
+        offset,
+        total,
+        rangeStart: offset,
+        rangeEnd: offset + limit - 1
+      });
+
       const { data: invoices, error } = await query
         .order('created_at', { ascending: false })
         .range(offset, offset + limit - 1);
@@ -293,6 +303,71 @@ class InvoiceListService {
     } catch (error) {
       console.error('Error in updateInvoicePUC:', error);
       return false;
+    }
+  }
+
+  /**
+   * Get retention details for an invoice
+   */
+  async getInvoiceRetentionDetails(invoiceId: string, companyId: string): Promise<{
+    retefuente: number;
+    reteica: number;
+    reteiva: number;
+    details: Array<{
+      tax_type: string;
+      concept_code: string;
+      concept_description: string;
+      tax_amount: number;
+      tax_rate: number;
+      municipality?: string;
+    }>;
+  }> {
+    try {
+      const { data: retentions, error } = await this.supabase
+        .from('invoice_taxes')
+        .select('*')
+        .eq('invoice_id', invoiceId)
+        .eq('company_id', companyId)
+        .in('tax_type', ['RETENCION_FUENTE', 'RETENCION_ICA', 'RETENCION_IVA']);
+
+      if (error) {
+        console.error('Error fetching retention details:', error);
+        return { retefuente: 0, reteica: 0, reteiva: 0, details: [] };
+      }
+
+      let retefuente = 0;
+      let reteica = 0;
+      let reteiva = 0;
+
+      const details = (retentions || []).map(retention => {
+        const amount = parseFloat(retention.tax_amount) || 0;
+
+        switch (retention.tax_type) {
+          case 'RETENCION_FUENTE':
+            retefuente += amount;
+            break;
+          case 'RETENCION_ICA':
+            reteica += amount;
+            break;
+          case 'RETENCION_IVA':
+            reteiva += amount;
+            break;
+        }
+
+        return {
+          tax_type: retention.tax_type,
+          concept_code: retention.concept_code || '',
+          concept_description: retention.concept_description || retention.tax_category || '',
+          tax_amount: amount,
+          tax_rate: parseFloat(retention.tax_rate) || 0,
+          municipality: retention.municipality
+        };
+      });
+
+      return { retefuente, reteica, reteiva, details };
+    } catch (error) {
+      console.error('Error in getInvoiceRetentionDetails:', error);
+      return { retefuente: 0, reteica: 0, reteiva: 0, details: [] };
     }
   }
 

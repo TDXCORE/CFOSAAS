@@ -60,6 +60,10 @@ interface SupplierReport {
   total_amount: number;
   avg_invoice_value: number;
   total_taxes: number;
+  total_retefuente: number;
+  total_reteica: number;
+  total_reteiva: number;
+  total_retentions: number;
   last_invoice_date: string;
   first_invoice_date: string;
   classification_accuracy: number;
@@ -136,6 +140,9 @@ class ReportsService {
           { key: 'total_amount', label: 'Monto Total', type: 'currency' },
           { key: 'avg_invoice_value', label: 'Promedio', type: 'currency' },
           { key: 'total_taxes', label: 'Impuestos', type: 'currency' },
+          { key: 'total_retefuente', label: 'ReteFuente', type: 'currency' },
+          { key: 'total_reteica', label: 'ReteICA', type: 'currency' },
+          { key: 'total_reteiva', label: 'ReteIVA', type: 'currency' },
           { key: 'classification_accuracy', label: 'Precisión', type: 'percentage' },
         ],
       },
@@ -163,10 +170,6 @@ class ReportsService {
     companyId: string,
     filters: InvoiceFilters = {}
   ): Promise<DetailedInvoiceReport[]> {
-    // Check if this is a mock company
-    if (companyId.startsWith('mock-company-')) {
-      return this.generateMockInvoiceReport(companyId, filters);
-    }
 
     let query = this.supabase
       .from('invoices')
@@ -280,10 +283,6 @@ class ReportsService {
     dateFrom: string,
     dateTo: string
   ): Promise<TaxSummaryReport[]> {
-    // Check if this is a mock company
-    if (companyId.startsWith('mock-company-')) {
-      return this.generateMockTaxSummaryReport(companyId, dateFrom, dateTo);
-    }
 
     // Get invoices first
     const { data: invoices, error } = await this.supabase
@@ -397,40 +396,108 @@ class ReportsService {
     companyId: string,
     filters: InvoiceFilters = {}
   ): Promise<SupplierReport[]> {
-    // Check if this is a mock company
-    if (companyId.startsWith('mock-company-')) {
-      return this.generateMockSupplierReport(companyId, filters);
-    }
 
-    let query = this.supabase
+    console.log('🚀 Starting supplier report for company:', companyId);
+    console.log('🔍 Filters applied:', filters);
+
+    // SIMPLE QUERY: Get ALL invoices for this company, no filters
+    const { data: invoices, error } = await this.supabase
       .from('invoices')
       .select(`
+        id,
         supplier_tax_id,
         supplier_name,
         total_amount,
         total_tax,
         total_retention,
         issue_date,
-        account_classification_confidence,
-        manual_review_required
+        status,
+        created_at,
+        deleted_at
       `)
       .eq('company_id', companyId)
-      .eq('status', 'validated');
+      .order('supplier_name', { ascending: true });
 
-    // Apply date filters
-    if (filters.date_from) {
-      query = query.gte('issue_date', filters.date_from);
-    }
+    console.log('📊 Raw invoice data:', {
+      totalInvoices: invoices?.length || 0,
+      error: error?.message,
+      // Show ALL unique supplier names
+      allUniqueSuppliers: invoices ? [...new Set(invoices.map(inv => inv.supplier_name))].sort() : [],
+    });
 
-    if (filters.date_to) {
-      query = query.lte('issue_date', filters.date_to);
-    }
+    // Check specifically for "prosuminisitrso"
+    const prosuministrsoInvoices = invoices?.filter(inv =>
+      inv.supplier_name?.toLowerCase().includes('prosum') ||
+      inv.supplier_name?.toLowerCase().includes('ministro') ||
+      inv.supplier_name?.toLowerCase().includes('suministr')
+    ) || [];
 
-    const { data: invoices, error } = await query;
+    console.log('🔍 Prosuminisitrso search:', {
+      found: prosuministrsoInvoices.length,
+      invoices: prosuministrsoInvoices.map(inv => ({
+        id: inv.id,
+        supplier_name: inv.supplier_name,
+        supplier_tax_id: inv.supplier_tax_id,
+        total_amount: inv.total_amount,
+        status: inv.status,
+        deleted_at: inv.deleted_at
+      }))
+    });
 
     if (error) {
       throw new Error(`Error generating supplier report: ${error.message}`);
     }
+
+    if (!invoices || invoices.length === 0) {
+      console.log('⚠️ No invoices found for supplier report');
+      return [];
+    }
+
+    // Get detailed retention information for all invoices
+    const invoiceIds = invoices.map(inv => inv.id);
+    let retentionData: any[] = [];
+
+    if (invoiceIds.length > 0) {
+      const { data: taxes } = await this.supabase
+        .from('invoice_taxes')
+        .select('invoice_id, tax_type, tax_amount')
+        .in('invoice_id', invoiceIds)
+        .in('tax_type', ['RETENCION_FUENTE', 'RETENCION_ICA', 'RETENCION_IVA']);
+
+      retentionData = taxes || [];
+    }
+
+    // Create retention map by invoice
+    const retentionMap = new Map<string, {
+      retefuente: number;
+      reteica: number;
+      reteiva: number;
+    }>();
+
+    retentionData.forEach(retention => {
+      if (!retentionMap.has(retention.invoice_id)) {
+        retentionMap.set(retention.invoice_id, {
+          retefuente: 0,
+          reteica: 0,
+          reteiva: 0,
+        });
+      }
+
+      const invoiceRetentions = retentionMap.get(retention.invoice_id)!;
+      const amount = parseFloat(retention.tax_amount) || 0;
+
+      switch (retention.tax_type) {
+        case 'RETENCION_FUENTE':
+          invoiceRetentions.retefuente += amount;
+          break;
+        case 'RETENCION_ICA':
+          invoiceRetentions.reteica += amount;
+          break;
+        case 'RETENCION_IVA':
+          invoiceRetentions.reteiva += amount;
+          break;
+      }
+    });
 
     // Group by supplier
     const supplierMap = new Map<string, {
@@ -438,18 +505,26 @@ class ReportsService {
       invoices: any[];
       total_amount: number;
       total_taxes: number;
+      total_retefuente: number;
+      total_reteica: number;
+      total_reteiva: number;
       confidences: number[];
     }>();
 
-    (invoices || []).forEach(invoice => {
-      const key = invoice.supplier_tax_id;
-      
+    invoices.forEach(invoice => {
+      // Use supplier name as the primary key, fallback to tax_id if no name
+      const key = invoice.supplier_name || invoice.supplier_tax_id || 'UNKNOWN';
+
       if (!supplierMap.has(key)) {
         supplierMap.set(key, {
-          supplier_name: invoice.supplier_name || key,
+          supplier_name: invoice.supplier_name || 'N/A',
+          supplier_tax_id: invoice.supplier_tax_id || 'N/A',
           invoices: [],
           total_amount: 0,
           total_taxes: 0,
+          total_retefuente: 0,
+          total_reteica: 0,
+          total_reteiva: 0,
           confidences: [],
         });
       }
@@ -458,13 +533,21 @@ class ReportsService {
       supplierData.invoices.push(invoice);
       supplierData.total_amount += invoice.total_amount || 0;
       supplierData.total_taxes += (invoice.total_tax || 0) + (invoice.total_retention || 0);
-      
+
+      // Add retention breakdown
+      const invoiceRetentions = retentionMap.get(invoice.id);
+      if (invoiceRetentions) {
+        supplierData.total_retefuente += invoiceRetentions.retefuente;
+        supplierData.total_reteica += invoiceRetentions.reteica;
+        supplierData.total_reteiva += invoiceRetentions.reteiva;
+      }
+
       if (invoice.account_classification_confidence) {
         supplierData.confidences.push(invoice.account_classification_confidence);
       }
     });
 
-    return Array.from(supplierMap.entries()).map(([supplier_tax_id, data]) => {
+    const suppliers = Array.from(supplierMap.entries()).map(([supplierKey, data]) => {
       const sortedDates = data.invoices
         .map(inv => inv.issue_date)
         .sort();
@@ -474,17 +557,28 @@ class ReportsService {
         : 0;
 
       return {
-        supplier_tax_id,
+        supplier_tax_id: data.supplier_tax_id,
         supplier_name: data.supplier_name,
         total_invoices: data.invoices.length,
         total_amount: data.total_amount,
         avg_invoice_value: data.total_amount / data.invoices.length,
         total_taxes: data.total_taxes,
+        total_retefuente: data.total_retefuente,
+        total_reteica: data.total_reteica,
+        total_reteiva: data.total_reteiva,
+        total_retentions: data.total_retefuente + data.total_reteica + data.total_reteiva,
         last_invoice_date: sortedDates[sortedDates.length - 1] || '',
         first_invoice_date: sortedDates[0] || '',
         classification_accuracy: avg_confidence * 100,
       };
     }).sort((a, b) => b.total_amount - a.total_amount);
+
+    console.log('✅ Generated supplier report:', {
+      totalSuppliers: suppliers.length,
+      supplierNames: suppliers.map(s => s.supplier_name).slice(0, 5)
+    });
+
+    return suppliers;
   }
 
   /**
@@ -494,10 +588,6 @@ class ReportsService {
     companyId: string,
     filters: InvoiceFilters = {}
   ): Promise<PUCClassificationReport[]> {
-    // Check if this is a mock company
-    if (companyId.startsWith('mock-company-')) {
-      return this.generateMockPUCReport(companyId, filters);
-    }
 
     const { data: invoices, error } = await this.supabase
       .from('invoices')
@@ -704,286 +794,8 @@ class ReportsService {
     ).join('\n');
   }
 
-  /**
-   * Generate mock invoice data for demo/testing purposes
-   */
-  private generateMockInvoiceReport(companyId: string, filters: InvoiceFilters = {}): DetailedInvoiceReport[] {
-    const mockInvoices: DetailedInvoiceReport[] = [
-      {
-        invoice_number: 'FACT-2024-001',
-        issue_date: '2024-01-15',
-        due_date: '2024-02-15',
-        supplier_name: 'Proveedor Principal S.A.S',
-        supplier_tax_id: '900123456-1',
-        customer_name: 'Mi Empresa SAS',
-        subtotal: 5000000,
-        total_tax: 950000,
-        total_retention: 125000,
-        total_amount: 5825000,
-        puc_code: '5135',
-        puc_name: 'Servicios',
-        status: 'validated',
-        processing_status: 'calculated',
-        source_file_type: 'xml',
-        manual_review_required: false,
-        created_at: '2024-01-15T10:30:00Z'
-      },
-      {
-        invoice_number: 'FACT-2024-002',
-        issue_date: '2024-01-16',
-        due_date: '2024-02-16',
-        supplier_name: 'Distribuciones Colombia Ltda',
-        supplier_tax_id: '800987654-2',
-        customer_name: 'Mi Empresa SAS',
-        subtotal: 3200000,
-        total_tax: 608000,
-        total_retention: 80000,
-        total_amount: 3728000,
-        puc_code: '4135',
-        puc_name: 'Comercio al por mayor y al por menor',
-        status: 'validated',
-        processing_status: 'calculated',
-        source_file_type: 'xml',
-        manual_review_required: false,
-        created_at: '2024-01-16T14:22:00Z'
-      },
-      {
-        invoice_number: 'FACT-2024-003',
-        issue_date: '2024-01-17',
-        due_date: '2024-02-17',
-        supplier_name: 'Suministros Bogotá',
-        supplier_tax_id: '700456789-3',
-        customer_name: 'Mi Empresa SAS',
-        subtotal: 1800000,
-        total_tax: 342000,
-        total_retention: 45000,
-        total_amount: 2097000,
-        puc_code: '5145',
-        puc_name: 'Mantenimiento y Reparaciones',
-        status: 'validated',
-        processing_status: 'calculated',
-        source_file_type: 'pdf',
-        manual_review_required: true,
-        created_at: '2024-01-17T09:15:00Z'
-      },
-      {
-        invoice_number: 'FACT-2024-004',
-        issue_date: '2024-01-18',
-        due_date: '2024-02-18',
-        supplier_name: 'Comercializadora Andina',
-        supplier_tax_id: '600321987-4',
-        customer_name: 'Mi Empresa SAS',
-        subtotal: 2400000,
-        total_tax: 456000,
-        total_retention: 60000,
-        total_amount: 2796000,
-        puc_code: '5110',
-        puc_name: 'Honorarios',
-        status: 'validated',
-        processing_status: 'calculated',
-        source_file_type: 'xml',
-        manual_review_required: false,
-        created_at: '2024-01-18T16:45:00Z'
-      },
-      {
-        invoice_number: 'FACT-2024-005',
-        issue_date: '2024-01-19',
-        due_date: '2024-02-19',
-        supplier_name: 'Importadora del Valle',
-        supplier_tax_id: '500654321-5',
-        customer_name: 'Mi Empresa SAS',
-        subtotal: 4200000,
-        total_tax: 798000,
-        total_retention: 105000,
-        total_amount: 4893000,
-        puc_code: '1528',
-        puc_name: 'Equipo de computación y comunicación',
-        status: 'pending',
-        processing_status: 'classified',
-        source_file_type: 'xml',
-        manual_review_required: false,
-        created_at: '2024-01-19T11:30:00Z'
-      },
-      {
-        invoice_number: 'FACT-2024-006',
-        issue_date: '2024-01-20',
-        due_date: '2024-02-20',
-        supplier_name: 'Servicios Profesionales CO',
-        supplier_tax_id: '400789123-6',
-        customer_name: 'Mi Empresa SAS',
-        subtotal: 6500000,
-        total_tax: 1235000,
-        total_retention: 162500,
-        total_amount: 7572500,
-        puc_code: '5110',
-        puc_name: 'Honorarios',
-        status: 'validated',
-        processing_status: 'calculated',
-        source_file_type: 'xml',
-        manual_review_required: false,
-        created_at: '2024-01-20T13:20:00Z'
-      }
-    ];
 
-    // Apply basic filters
-    let filteredInvoices = mockInvoices;
 
-    if (filters.status?.length) {
-      filteredInvoices = filteredInvoices.filter(inv => filters.status!.includes(inv.status));
-    }
-
-    if (filters.supplier_tax_id) {
-      filteredInvoices = filteredInvoices.filter(inv => inv.supplier_tax_id === filters.supplier_tax_id);
-    }
-
-    if (filters.date_from) {
-      filteredInvoices = filteredInvoices.filter(inv => inv.issue_date >= filters.date_from!);
-    }
-
-    if (filters.date_to) {
-      filteredInvoices = filteredInvoices.filter(inv => inv.issue_date <= filters.date_to!);
-    }
-
-    if (filters.requires_review !== undefined) {
-      filteredInvoices = filteredInvoices.filter(inv => inv.manual_review_required === filters.requires_review);
-    }
-
-    return filteredInvoices;
-  }
-
-  /**
-   * Generate mock supplier analysis report
-   */
-  private generateMockSupplierReport(companyId: string, filters: InvoiceFilters = {}): SupplierReport[] {
-    return [
-      {
-        supplier_tax_id: '900123456-1',
-        supplier_name: 'Proveedor Principal S.A.S',
-        total_invoices: 8,
-        total_amount: 12500000,
-        avg_invoice_value: 1562500,
-        total_taxes: 2375000,
-        last_invoice_date: '2024-01-20',
-        first_invoice_date: '2024-01-15',
-        classification_accuracy: 95.5,
-      },
-      {
-        supplier_tax_id: '800987654-2',
-        supplier_name: 'Distribuciones Colombia Ltda',
-        total_invoices: 5,
-        total_amount: 8200000,
-        avg_invoice_value: 1640000,
-        total_taxes: 1558000,
-        last_invoice_date: '2024-01-18',
-        first_invoice_date: '2024-01-16',
-        classification_accuracy: 87.2,
-      },
-      {
-        supplier_tax_id: '700456789-3',
-        supplier_name: 'Suministros Bogotá',
-        total_invoices: 3,
-        total_amount: 4300000,
-        avg_invoice_value: 1433333,
-        total_taxes: 817000,
-        last_invoice_date: '2024-01-17',
-        first_invoice_date: '2024-01-17',
-        classification_accuracy: 92.8,
-      }
-    ];
-  }
-
-  /**
-   * Generate mock PUC classification report
-   */
-  private generateMockPUCReport(companyId: string, filters: InvoiceFilters = {}): PUCClassificationReport[] {
-    const totalAmount = 25000000; // Total amount for percentage calculations
-
-    return [
-      {
-        puc_code: '5135',
-        puc_name: 'Servicios',
-        invoice_count: 12,
-        total_amount: 8500000,
-        percentage_of_total: 34.0,
-        avg_confidence: 92.5,
-        manual_review_count: 1,
-      },
-      {
-        puc_code: '4135',
-        puc_name: 'Comercio al por mayor y al por menor',
-        invoice_count: 8,
-        total_amount: 6200000,
-        percentage_of_total: 24.8,
-        avg_confidence: 88.3,
-        manual_review_count: 0,
-      },
-      {
-        puc_code: '5110',
-        puc_name: 'Honorarios',
-        invoice_count: 6,
-        total_amount: 5800000,
-        percentage_of_total: 23.2,
-        avg_confidence: 95.1,
-        manual_review_count: 0,
-      },
-      {
-        puc_code: '5145',
-        puc_name: 'Mantenimiento y Reparaciones',
-        invoice_count: 4,
-        total_amount: 2900000,
-        percentage_of_total: 11.6,
-        avg_confidence: 89.7,
-        manual_review_count: 2,
-      },
-      {
-        puc_code: '1528',
-        puc_name: 'Equipo de computación y comunicación',
-        invoice_count: 2,
-        total_amount: 1600000,
-        percentage_of_total: 6.4,
-        avg_confidence: 91.2,
-        manual_review_count: 0,
-      }
-    ];
-  }
-
-  /**
-   * Generate mock tax summary report
-   */
-  private generateMockTaxSummaryReport(companyId: string, dateFrom: string, dateTo: string): TaxSummaryReport[] {
-    return [
-      {
-        period: '2024-01',
-        total_invoices: 32,
-        total_amount: 25000000,
-        total_iva: 4750000,
-        total_retentions: 625000,
-        total_ica: 100000,
-        net_amount: 24375000,
-        tax_burden_percentage: 21.9,
-      },
-      {
-        period: '2024-02',
-        total_invoices: 28,
-        total_amount: 22500000,
-        total_iva: 4275000,
-        total_retentions: 562500,
-        total_ica: 90000,
-        net_amount: 21937500,
-        tax_burden_percentage: 21.9,
-      },
-      {
-        period: '2024-03',
-        total_invoices: 35,
-        total_amount: 28200000,
-        total_iva: 5358000,
-        total_retentions: 705000,
-        total_ica: 112800,
-        net_amount: 27495000,
-        tax_burden_percentage: 21.9,
-      }
-    ];
-  }
 }
 
 export const reportsService = new ReportsService();

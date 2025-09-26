@@ -8,9 +8,9 @@ export function getSupabaseClientKeys() {
     url: process.env.NEXT_PUBLIC_SUPABASE_URL,
     anonKey: process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
   };
-  
-  // Debug logging removed - issue resolved
-  
+
+  // Debug logging removed - connection issues resolved
+
   return z
     .object({
       url: z.string().min(1),

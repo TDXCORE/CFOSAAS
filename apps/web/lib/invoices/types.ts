@@ -6,68 +6,71 @@
 export interface Invoice {
   id: string;
   company_id: string;
-  
+
   // Document identification
   invoice_number: string;
   external_id?: string;
   document_type: 'invoice' | 'credit_note' | 'debit_note';
-  
+
   // Dates
   issue_date: string; // ISO date
   due_date?: string;
   tax_date?: string;
-  
+
   // Parties
   supplier_tax_id: string;
   supplier_name: string;
   supplier_email?: string;
   customer_tax_id?: string;
   customer_name?: string;
-  
+
   // Amounts
   currency: string; // Default 'COP'
   subtotal: number;
   total_tax: number;
   total_retention: number;
   total_amount: number;
-  
+
   // PUC classification
   puc_code?: string;
   puc_name?: string;
   account_classification_confidence?: number; // 0-1
-  
+
   // Processing status
   status: InvoiceStatus;
   processing_status: ProcessingStatus;
-  
+
   // Source files
   source_file_name?: string;
   source_file_type?: 'xml' | 'pdf' | 'zip_attachment';
   source_file_url?: string;
   source_email_id?: string;
   source_email_sender?: string;
-  
+
   // Processing metadata
   processing_metadata?: ProcessingMetadata;
   validation_errors?: ValidationError[];
   manual_review_required: boolean;
   reviewed_by?: string;
   reviewed_at?: string;
-  
+
   // Export info
   exported_to?: string;
   external_reference?: string;
   exported_at?: string;
   export_status: ExportStatus;
-  
+
   // Timestamps
   created_at: string;
   updated_at: string;
   deleted_at?: string;
-  
+
   // Related data (loaded separately)
   line_items?: InvoiceLineItem[];
   taxes?: InvoiceTax[];
+
+  // Enhanced retention details (2025)
+  retention_details?: RetentionDetails;
 }
 
 export interface InvoiceLineItem {
@@ -485,4 +488,122 @@ export interface ExportResult {
   file_url?: string;
   file_name?: string;
   error?: string;
+}
+
+// Enhanced Retention System Types (2025)
+export interface RetentionDetails {
+  retefuente?: number;
+  retefuente_rate?: number;
+  retefuente_concept?: string;
+  retefuente_dian_code?: string;
+
+  reteica?: number;
+  reteica_rate?: number;
+  reteica_municipality?: string;
+
+  reteiva?: number;
+  reteiva_rate?: number;
+
+  total_retentions: number;
+  calculation_method: 'automatic' | 'manual';
+  applied_rules: string[];
+  confidence?: number;
+
+  // Detailed breakdown
+  breakdown?: RetentionBreakdown;
+}
+
+export interface RetentionBreakdown {
+  retefuente: RetentionDetail[];
+  reteica: RetentionDetail[];
+  reteiva: RetentionDetail[];
+  total_retentions: number;
+  summary: {
+    total_retefuente: number;
+    total_reteica: number;
+    total_reteiva: number;
+    net_amount: number;
+  };
+}
+
+export interface RetentionDetail {
+  tax_type: 'RETENCION_FUENTE' | 'RETENCION_ICA' | 'RETENCION_IVA';
+  concept_code: string;
+  concept_description: string;
+  taxable_base: number;
+  tax_rate: number;
+  tax_amount: number;
+  threshold_uvt?: number;
+  municipality?: string;
+  supplier_type: string;
+  calculation_method: 'automatic' | 'manual' | 'override';
+  applied_rule: string;
+  confidence: number;
+  dian_code?: string;
+  municipal_code?: string;
+}
+
+export interface TaxEntity {
+  tax_id: string;
+  name: string;
+  entity_type: 'natural_person' | 'company';
+  regime_type: 'simplified' | 'common' | 'special';
+  is_retention_agent: boolean;
+  is_ica_subject: boolean;
+  is_declarant: boolean;
+  municipalities: string[];
+  verification_status: 'verified' | 'pending' | 'manual_review';
+  last_verified_at?: Date;
+}
+
+export interface RetentionSummary {
+  total_retefuente: number;
+  total_reteica: number;
+  total_reteiva: number;
+  total_retentions: number;
+  by_concept: Record<string, {
+    amount: number;
+    base: number;
+    count: number;
+  }>;
+  by_supplier: Array<{
+    tax_id: string;
+    name: string;
+    total_amount: number;
+    total_base: number;
+    invoice_count: number;
+  }>;
+}
+
+export interface RetentionFilters {
+  year?: number;
+  month?: number;
+  supplier_tax_id?: string;
+  retention_type?: 'RETENCION_FUENTE' | 'RETENCION_ICA' | 'RETENCION_IVA';
+  concept_code?: string;
+  municipality?: string;
+}
+
+export interface RetentionCertificate {
+  id: string;
+  company_id: string;
+  certificate_number: string;
+  certificate_year: number;
+  supplier_tax_id: string;
+  supplier_name: string;
+  period_year: number;
+  period_month?: number;
+  total_retefuente: number;
+  total_reteica: number;
+  total_reteiva: number;
+  total_base_retefuente: number;
+  total_base_reteiva: number;
+  status: 'draft' | 'issued' | 'sent' | 'acknowledged';
+  issued_at?: string;
+  sent_at?: string;
+  invoice_ids: string[];
+  pdf_file_url?: string;
+  xml_file_url?: string;
+  created_at: string;
+  updated_at: string;
 }

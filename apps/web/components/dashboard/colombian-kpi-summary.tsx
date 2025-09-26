@@ -178,7 +178,7 @@ export function ColombianKPISummary({ kpis, className }: ColombianKPISummaryProp
               </div>
               <Progress value={kpis.automationRate} className="h-3" />
               <p className="text-xs text-muted-foreground mt-1">
-                Meta: >85% para eficiencia óptima
+                Meta: &gt;85% para eficiencia óptima
               </p>
             </div>
 

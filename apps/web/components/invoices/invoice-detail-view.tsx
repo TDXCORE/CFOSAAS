@@ -38,6 +38,7 @@ import {
 } from 'lucide-react';
 import { invoiceListService } from '~/lib/invoices/invoice-list-service';
 import type { Invoice } from '~/lib/invoices/types';
+import { RetentionDetailComponent } from './retention-detail';
 import { toast } from 'sonner';
 
 interface InvoiceDetailViewProps {
@@ -58,6 +59,7 @@ export function InvoiceDetailView({
   const [invoice, setInvoice] = useState<Invoice | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [recalculatingRetentions, setRecalculatingRetentions] = useState(false);
 
   // Load invoice details
   useEffect(() => {
@@ -85,6 +87,62 @@ export function InvoiceDetailView({
 
     loadInvoiceDetails();
   }, [invoiceId, companyId]);
+
+  // Recalculate retentions
+  const handleRecalculateRetentions = async () => {
+    if (!invoice) {
+      console.log('❌ No invoice available for recalculation');
+      return;
+    }
+
+    // Debug: Show IDs
+    console.log('🔍 Starting recalculation for:', {
+      invoiceId: invoice.id,
+      companyId: companyId,
+      invoiceNumber: invoice.invoice_number,
+      amount: invoice.total_amount
+    });
+
+    try {
+      setRecalculatingRetentions(true);
+      console.log('🚀 Calling recalculate API...');
+
+      // Call the simplified recalculate API
+      const response = await fetch('/api/simple-recalculate', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          invoiceId: invoice.id,
+          companyId: companyId,
+        }),
+      });
+
+      const result = await response.json();
+      console.log('📊 API Response:', result);
+
+      if (response.ok) {
+        toast.success('Retenciones recalculadas exitosamente');
+        console.log('✅ Recalculation successful, reloading invoice details...');
+
+        // Reload the invoice details to show updated retentions
+        const updatedInvoice = await invoiceListService.getInvoiceDetails(invoiceId, companyId);
+        if (updatedInvoice) {
+          setInvoice(updatedInvoice);
+          console.log('🔄 Invoice details reloaded');
+        }
+      } else {
+        console.error('❌ API error:', result);
+        toast.error(result.message || 'Error recalculando retenciones');
+      }
+    } catch (error) {
+      console.error('Error recalculating retentions:', error);
+      toast.error('Error recalculando retenciones');
+    } finally {
+      setRecalculatingRetentions(false);
+    }
+  };
 
   // Format currency
   const formatCurrency = (amount: number) => {
@@ -170,6 +228,15 @@ export function InvoiceDetailView({
               Editar
             </Button>
           )}
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={handleRecalculateRetentions}
+            disabled={recalculatingRetentions}
+          >
+            <Calculator className={`h-4 w-4 mr-2 ${recalculatingRetentions ? 'animate-spin' : ''}`} />
+            {recalculatingRetentions ? 'Recalculando...' : 'Recalcular Retenciones'}
+          </Button>
           <Button variant="outline" size="sm">
             <Download className="h-4 w-4 mr-2" />
             Descargar
@@ -334,6 +401,12 @@ export function InvoiceDetailView({
               </CardContent>
             </Card>
           )}
+
+          {/* Retention Details Section */}
+          <RetentionDetailComponent
+            invoice={invoice}
+            companyId={companyId}
+          />
         </div>
 
         {/* Summary Sidebar */}

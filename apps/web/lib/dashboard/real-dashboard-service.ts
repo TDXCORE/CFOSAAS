@@ -120,12 +120,16 @@ class RealDashboardService {
     const previousMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1);
     const previousMonthEnd = new Date(now.getFullYear(), now.getMonth(), 0);
 
-    // Current month invoices
+    // Get invoices from last 3 months for better visibility
+    const threeMonthsAgo = new Date();
+    threeMonthsAgo.setMonth(threeMonthsAgo.getMonth() - 3);
+
+    // Current invoices (last 3 months)
     const { data: currentInvoices, error: currentError } = await this.supabase
       .from('invoices')
-      .select('id, total_amount, subtotal, status, processing_status, created_at')
+      .select('id, total_amount, subtotal, status, processing_status, created_at, puc_code, issue_date')
       .eq('company_id', companyId)
-      .gte('issue_date', currentMonth.toISOString())
+      .gte('issue_date', threeMonthsAgo.toISOString())
       .is('deleted_at', null);
 
     if (currentError) {
@@ -146,6 +150,17 @@ class RealDashboardService {
       console.warn('Warning fetching previous invoices:', previousError);
     }
 
+    console.log('📊 Invoice metrics loaded:', {
+      currentInvoicesCount: currentInvoices?.length || 0,
+      previousInvoicesCount: previousInvoices?.length || 0,
+      totalCurrentAmount: currentInvoices?.reduce((sum, inv) => sum + (parseFloat(inv.total_amount) || 0), 0) || 0,
+      sampleInvoices: currentInvoices?.slice(0, 2).map(inv => ({
+        amount: inv.total_amount,
+        status: inv.status,
+        issue_date: inv.issue_date
+      })) || []
+    });
+
     return {
       current: currentInvoices || [],
       previous: previousInvoices || [],
@@ -158,7 +173,9 @@ class RealDashboardService {
    * Get taxes breakdown metrics
    */
   private async getTaxesMetrics(companyId: string) {
-    const currentMonth = new Date(new Date().getFullYear(), new Date().getMonth(), 1);
+    // Get all tax data from the past 3 months for better visibility
+    const threeMonthsAgo = new Date();
+    threeMonthsAgo.setMonth(threeMonthsAgo.getMonth() - 3);
 
     const { data: taxes, error } = await this.supabase
       .from('invoice_taxes')
@@ -167,17 +184,75 @@ class RealDashboardService {
         tax_amount,
         taxable_base,
         tax_rate,
+        concept_code,
+        concept_description,
+        municipality,
+        supplier_type,
         created_at
       `)
       .eq('company_id', companyId)
-      .gte('created_at', currentMonth.toISOString());
+      .gte('created_at', threeMonthsAgo.toISOString());
 
     if (error) {
       console.error('Error fetching taxes:', error);
-      return [];
+      return {
+        iva: 0,
+        retentions: 0,
+        ica: 0,
+        total: 0,
+        details: []
+      };
     }
 
-    return taxes || [];
+    // Calculate tax breakdown
+    const taxData = taxes || [];
+    const breakdown = {
+      iva: 0,
+      retentions: 0,
+      ica: 0,
+      total: 0,
+      details: taxData
+    };
+
+    taxData.forEach(tax => {
+      const amount = parseFloat(tax.tax_amount) || 0;
+      const taxType = tax.tax_type?.toLowerCase() || '';
+
+      if (taxType.includes('iva') && !taxType.includes('ret')) {
+        breakdown.iva += amount;
+      } else if (
+        taxType.includes('retencion_fuente') ||
+        taxType.includes('retefuente') ||
+        taxType.includes('retencion_iva') ||
+        taxType.includes('reteiva') ||
+        taxType.includes('retencion_ica') ||
+        taxType.includes('reteica')
+      ) {
+        breakdown.retentions += amount;
+      } else if (
+        taxType.includes('ica') && !taxType.includes('retencion')
+      ) {
+        breakdown.ica += amount;
+      }
+
+      breakdown.total += amount;
+    });
+
+    console.log('📊 Tax metrics calculated:', {
+      iva: breakdown.iva,
+      retentions: breakdown.retentions,
+      ica: breakdown.ica,
+      total: breakdown.total,
+      taxCount: taxData.length,
+      taxTypes: [...new Set(taxData.map(t => t.tax_type))],
+      sampleTaxes: taxData.slice(0, 3).map(t => ({
+        type: t.tax_type,
+        amount: t.tax_amount,
+        concept: t.concept_description
+      }))
+    });
+
+    return breakdown;
   }
 
   /**
@@ -304,11 +379,45 @@ class RealDashboardService {
   /**
    * Calculate taxes breakdown from tax data
    */
-  private calculateTaxesBreakdown(taxesData: any[]) {
-    const iva = taxesData.filter(t => t.tax_type === 'IVA').reduce((sum, t) => sum + (parseFloat(t.tax_amount) || 0), 0);
-    const retentions = taxesData.filter(t => t.tax_type.includes('RETENCION')).reduce((sum, t) => sum + (parseFloat(t.tax_amount) || 0), 0);
-    const ica = taxesData.filter(t => t.tax_type === 'ICA').reduce((sum, t) => sum + (parseFloat(t.tax_amount) || 0), 0);
-    
+  private calculateTaxesBreakdown(taxesData: any) {
+    // If taxesData is already processed by getTaxesMetrics, use it directly
+    if (taxesData && typeof taxesData === 'object' && 'iva' in taxesData) {
+      return {
+        iva: taxesData.iva || 0,
+        retentions: taxesData.retentions || 0,
+        ica: taxesData.ica || 0,
+        total: taxesData.total || 0,
+      };
+    }
+
+    // Fallback for old format (array)
+    const taxArray = Array.isArray(taxesData) ? taxesData : [];
+    let iva = 0;
+    let retentions = 0;
+    let ica = 0;
+
+    taxArray.forEach(tax => {
+      const amount = parseFloat(tax.tax_amount) || 0;
+      const taxType = tax.tax_type?.toLowerCase() || '';
+
+      if (taxType.includes('iva') && !taxType.includes('ret')) {
+        iva += amount;
+      } else if (
+        taxType.includes('retencion_fuente') ||
+        taxType.includes('retefuente') ||
+        taxType.includes('retencion_iva') ||
+        taxType.includes('reteiva') ||
+        taxType.includes('retencion_ica') ||
+        taxType.includes('reteica')
+      ) {
+        retentions += amount;
+      } else if (
+        taxType.includes('ica') && !taxType.includes('retencion')
+      ) {
+        ica += amount;
+      }
+    });
+
     return {
       iva,
       retentions,

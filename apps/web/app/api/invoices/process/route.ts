@@ -8,6 +8,8 @@ import { xmlProcessor } from '~/lib/invoices/xml-processor';
 import { invoicesService } from '~/lib/invoices/invoices-service';
 import { invoiceStorage } from '~/lib/storage/invoice-storage';
 import { openaiService } from '~/lib/ai/openai-service';
+import { retentionService } from '~/lib/taxes/retention-service';
+import { createClient } from '@supabase/supabase-js';
 
 export async function POST(request: NextRequest) {
   console.log('🚀 API ROUTE HIT: Invoice processing request received!');
@@ -255,7 +257,7 @@ async function processXMLContent(
         createResult.data.id,
         companyId
       );
-      
+
       if (classificationResult.success) {
         console.log('✅ PUC classification successful:', {
           puc_code: classificationResult.puc_code,
@@ -267,6 +269,16 @@ async function processXMLContent(
     } catch (classificationError) {
       console.error('❌ Error during PUC classification:', classificationError);
       // Continue without failing the entire operation
+    }
+
+    // Calculate retentions automatically using simplified logic
+    console.log('📊 Calculating retentions using simplified logic...');
+    try {
+      await calculateSimpleRetentions(createResult.data.id, companyId, createResult.data);
+      console.log('✅ Retentions calculated successfully');
+    } catch (retentionError) {
+      console.error('❌ Error calculating retentions:', retentionError);
+      // Continue without failing the entire operation - retentions can be calculated later manually
     }
 
     return {
@@ -287,6 +299,125 @@ async function processXMLContent(
       fileType: 'xml',
       error: error instanceof Error ? error.message : 'Processing failed',
     };
+  }
+}
+
+/**
+ * Calculate simple retentions for newly created invoice
+ */
+async function calculateSimpleRetentions(invoiceId: string, companyId: string, invoiceData: any) {
+  const supabase = createClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY!,
+    {
+      auth: {
+        autoRefreshToken: false,
+        persistSession: false
+      }
+    }
+  );
+
+  const subtotal = invoiceData.subtotal || invoiceData.total_amount / 1.19;
+  const totalAmount = invoiceData.total_amount;
+
+  console.log('🧮 Calculating retentions for:', {
+    invoiceId,
+    totalAmount,
+    subtotal
+  });
+
+  // Simple retention calculations
+  let retentions = [];
+
+  // Only calculate retentions for invoices over $100,000
+  if (totalAmount >= 100000) {
+    // Retención en la Fuente: 11% for services, 3.5% for goods
+    const retefuente = Math.floor(subtotal * 0.11); // 11% for services
+    retentions.push({
+      invoice_id: invoiceId,
+      company_id: companyId,
+      tax_type: 'RETENCION_FUENTE',
+      tax_category: 'Servicios Generales',
+      taxable_base: subtotal,
+      tax_rate: 0.11,
+      tax_amount: retefuente,
+      concept_code: '365',
+      concept_description: 'Otros servicios',
+      verification_status: 'automatic'
+    });
+
+    // Retención ICA: 9.66 por mil (only if over $300,000)
+    if (totalAmount >= 300000) {
+      const reteica = Math.floor(subtotal * 0.00966);
+      retentions.push({
+        invoice_id: invoiceId,
+        company_id: companyId,
+        tax_type: 'RETENCION_ICA',
+        tax_category: 'Servicios Comerciales',
+        taxable_base: subtotal,
+        tax_rate: 0.00966,
+        tax_amount: reteica,
+        concept_code: 'ICA001',
+        concept_description: 'Actividad comercial general',
+        municipality: 'Bogotá',
+        verification_status: 'automatic'
+      });
+    }
+
+    // Retención IVA: 15% of IVA (if there's IVA)
+    const iva = invoiceData.total_tax || (totalAmount - subtotal);
+    if (iva > 0 && totalAmount >= 500000) {
+      const reteiva = Math.floor(iva * 0.15);
+      retentions.push({
+        invoice_id: invoiceId,
+        company_id: companyId,
+        tax_type: 'RETENCION_IVA',
+        tax_category: 'IVA General',
+        taxable_base: iva,
+        tax_rate: 0.15,
+        tax_amount: reteiva,
+        concept_code: 'RIV001',
+        concept_description: 'Retención IVA 15%',
+        verification_status: 'automatic'
+      });
+    }
+  }
+
+  console.log('📊 Calculated retentions:', {
+    count: retentions.length,
+    total: retentions.reduce((sum, r) => sum + r.tax_amount, 0)
+  });
+
+  // Insert retentions if any were calculated
+  if (retentions.length > 0) {
+    const { error: insertError } = await supabase
+      .from('invoice_taxes')
+      .insert(retentions);
+
+    if (insertError) {
+      console.error('❌ Error inserting retentions:', insertError);
+      throw new Error(`Failed to insert retentions: ${insertError.message}`);
+    }
+
+    // Update invoice total retention
+    const totalRetention = retentions.reduce((sum, r) => sum + r.tax_amount, 0);
+
+    const { error: updateError } = await supabase
+      .from('invoices')
+      .update({ total_retention: totalRetention })
+      .eq('id', invoiceId);
+
+    if (updateError) {
+      console.error('❌ Error updating invoice total retention:', updateError);
+      throw new Error(`Failed to update invoice: ${updateError.message}`);
+    }
+
+    console.log('✅ Retentions saved successfully:', {
+      count: retentions.length,
+      totalRetention
+    });
+  } else {
+    console.log('ℹ️ No retentions calculated (amount below thresholds)');
   }
 }
 

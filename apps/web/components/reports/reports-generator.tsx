@@ -19,17 +19,21 @@ import {
 import { Input } from '@kit/ui/input';
 import { Label } from '@kit/ui/label';
 import { Checkbox } from '@kit/ui/checkbox';
-import { 
-  FileText, 
-  Download, 
-  Calendar, 
-  Filter, 
-  BarChart3, 
+import {
+  FileText,
+  Download,
+  Calendar,
+  Filter,
+  BarChart3,
   PieChart,
   Users,
   Calculator,
   Loader2,
-  CheckCircle
+  CheckCircle,
+  ChevronLeft,
+  ChevronRight,
+  ChevronsLeft,
+  ChevronsRight
 } from 'lucide-react';
 import { useCurrentCompany } from '~/lib/companies/tenant-context';
 import { reportsService, type ReportTemplate } from '~/lib/reports/reports-service';
@@ -57,6 +61,8 @@ export function ReportsGenerator({ className }: ReportsGeneratorProps) {
     date_to: '2025-12-31',
   });
   const [exportFormat, setExportFormat] = useState<'csv' | 'excel' | 'json'>('csv');
+  const [currentPage, setCurrentPage] = useState(1);
+  const [itemsPerPage, setItemsPerPage] = useState(20);
 
   const reportTemplates = reportsService.getReportTemplates();
 
@@ -117,7 +123,8 @@ export function ReportsGenerator({ className }: ReportsGeneratorProps) {
       }
 
       setReportData(data);
-      
+      setCurrentPage(1); // Reset to first page when new data is generated
+
       toast.success(`Reporte generado: ${data.length} registros`);
 
     } catch (error) {
@@ -151,6 +158,21 @@ export function ReportsGenerator({ className }: ReportsGeneratorProps) {
       toast.error('Error al exportar: ' + (result.error || 'No se pudo exportar el reporte'));
     }
   }, [selectedTemplate, reportData, exportFormat, filters]);
+
+  // Pagination calculations
+  const totalPages = reportData ? Math.ceil(reportData.length / itemsPerPage) : 0;
+  const startIndex = (currentPage - 1) * itemsPerPage;
+  const endIndex = startIndex + itemsPerPage;
+  const currentData = reportData ? reportData.slice(startIndex, endIndex) : [];
+
+  const handlePageChange = (page: number) => {
+    setCurrentPage(page);
+  };
+
+  const handleItemsPerPageChange = (value: string) => {
+    setItemsPerPage(parseInt(value));
+    setCurrentPage(1);
+  };
 
   const formatValue = (value: any, type: string) => {
     if (value === null || value === undefined) return 'N/A';
@@ -324,9 +346,25 @@ export function ReportsGenerator({ className }: ReportsGeneratorProps) {
                     </Button>
                   </div>
                 </div>
-                <p className="text-sm text-muted-foreground">
-                  {reportData.length} registros encontrados
-                </p>
+                <div className="flex items-center justify-between">
+                  <p className="text-sm text-muted-foreground">
+                    {reportData.length} registros encontrados
+                  </p>
+                  <div className="flex items-center space-x-2">
+                    <span className="text-sm text-muted-foreground">Filas por página:</span>
+                    <Select value={itemsPerPage.toString()} onValueChange={handleItemsPerPageChange}>
+                      <SelectTrigger className="w-20">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="10">10</SelectItem>
+                        <SelectItem value="20">20</SelectItem>
+                        <SelectItem value="50">50</SelectItem>
+                        <SelectItem value="100">100</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
               </CardHeader>
               <CardContent>
                 <div className="overflow-x-auto">
@@ -341,8 +379,8 @@ export function ReportsGenerator({ className }: ReportsGeneratorProps) {
                       </tr>
                     </thead>
                     <tbody>
-                      {reportData.slice(0, 100).map((row, index) => (
-                        <tr key={index} className="border-b hover:bg-muted/50">
+                      {currentData.map((row, index) => (
+                        <tr key={startIndex + index} className="border-b hover:bg-muted/50">
                           {selectedTemplate.columns.map(column => (
                             <td key={column.key} className="p-2 text-sm">
                               {formatValue(row[column.key], column.type)}
@@ -353,11 +391,75 @@ export function ReportsGenerator({ className }: ReportsGeneratorProps) {
                     </tbody>
                   </table>
                 </div>
-                {reportData.length > 100 && (
-                  <p className="text-sm text-muted-foreground mt-4">
-                    Mostrando los primeros 100 registros de {reportData.length} total.
-                    Exporta el reporte para ver todos los datos.
-                  </p>
+
+                {/* Pagination Controls */}
+                {totalPages > 1 && (
+                  <div className="flex items-center justify-between mt-4 pt-4 border-t">
+                    <div className="text-sm text-muted-foreground">
+                      Mostrando {startIndex + 1} a {Math.min(endIndex, reportData.length)} de {reportData.length} registros
+                    </div>
+                    <div className="flex items-center space-x-2">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => handlePageChange(1)}
+                        disabled={currentPage === 1}
+                      >
+                        <ChevronsLeft className="h-4 w-4" />
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => handlePageChange(currentPage - 1)}
+                        disabled={currentPage === 1}
+                      >
+                        <ChevronLeft className="h-4 w-4" />
+                      </Button>
+
+                      {/* Page Numbers */}
+                      {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
+                        let pageNum;
+                        if (totalPages <= 5) {
+                          pageNum = i + 1;
+                        } else if (currentPage <= 3) {
+                          pageNum = i + 1;
+                        } else if (currentPage >= totalPages - 2) {
+                          pageNum = totalPages - 4 + i;
+                        } else {
+                          pageNum = currentPage - 2 + i;
+                        }
+
+                        return (
+                          <Button
+                            key={pageNum}
+                            variant={currentPage === pageNum ? "default" : "outline"}
+                            size="sm"
+                            onClick={() => handlePageChange(pageNum)}
+                            className="w-8"
+                          >
+                            {pageNum}
+                          </Button>
+                        );
+                      })}
+
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => handlePageChange(currentPage + 1)}
+                        disabled={currentPage === totalPages}
+                      >
+                        <ChevronRight className="h-4 w-4" />
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => handlePageChange(totalPages)}
+                        disabled={currentPage === totalPages}
+                      >
+                        <ChevronsRight className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  </div>
                 )}
               </CardContent>
             </Card>

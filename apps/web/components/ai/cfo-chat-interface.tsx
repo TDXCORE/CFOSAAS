@@ -55,9 +55,10 @@ export function CFOChatInterface({ className }: CFOChatInterfaceProps) {
     setIsTyping(true);
     
     try {
-      // Prepare context for AI
+      // Prepare context for AI with company ID for real data access
       const context = {
         company: currentCompany ? {
+          id: currentCompany.id,
           name: currentCompany.name,
           taxId: currentCompany.tax_id,
           industry: currentCompany.industry,

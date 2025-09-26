@@ -4,6 +4,7 @@
  */
 
 import OpenAI from 'openai';
+import { realDashboardService } from '../dashboard/real-dashboard-service';
 
 // Environment configuration
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
@@ -52,6 +53,7 @@ LIMITACIONES:
 
 // Financial Context Types
 interface CompanyContext {
+  id?: string;
   name: string;
   taxId: string;
   industry?: string;
@@ -86,16 +88,28 @@ export class OpenAIService {
     userMessage: string,
     context: ConversationContext = {}
   ): Promise<AIResponse> {
-    
-    // Fallback response if OpenAI is not available
-    if (!openai) {
-      return this.getFallbackResponse(userMessage, context);
-    }
 
     try {
-      // Build context-aware prompt
-      const contextPrompt = this.buildContextPrompt(context);
-      
+      // Get real financial data if company is provided
+      let realData: any = null;
+      if (context.company && 'id' in context.company) {
+        try {
+          console.log('🔄 Fetching real financial data for CFO AI...');
+          realData = await realDashboardService.getDashboardMetrics(context.company.id as string);
+          console.log('✅ Real financial data loaded for AI analysis');
+        } catch (error) {
+          console.warn('⚠️ Could not fetch real data, using provided context:', error);
+        }
+      }
+
+      // Fallback response if OpenAI is not available
+      if (!openai) {
+        return this.getFallbackResponse(userMessage, context, realData);
+      }
+
+      // Build context-aware prompt with real data
+      const contextPrompt = this.buildContextPrompt(context, realData);
+
       const completion = await openai.chat.completions.create({
         model: "gpt-4",
         messages: [
@@ -104,7 +118,7 @@ export class OpenAIService {
             content: COLOMBIAN_CFO_SYSTEM_PROMPT + contextPrompt
           },
           {
-            role: "user", 
+            role: "user",
             content: userMessage
           }
         ],
@@ -115,7 +129,7 @@ export class OpenAIService {
       });
 
       const aiMessage = completion.choices[0]?.message?.content || '';
-      
+
       return {
         message: aiMessage,
         suggestions: this.extractSuggestions(aiMessage),
@@ -132,34 +146,73 @@ export class OpenAIService {
   /**
    * Build context prompt with company and financial data
    */
-  private buildContextPrompt(context: ConversationContext): string {
+  private buildContextPrompt(context: ConversationContext, realData?: any): string {
     let prompt = '\n\nCONTEXTO ACTUAL:\n';
-    
+
     if (context.company) {
       prompt += `Empresa: ${context.company.name}\n`;
       prompt += `NIT: ${context.company.taxId}\n`;
-      
+
       if (context.company.industry) {
         prompt += `Sector: ${context.company.industry}\n`;
       }
-      
+
       if (context.company.monthlyRevenue) {
         prompt += `Ingresos mensuales aproximados: ${this.formatCurrency(context.company.monthlyRevenue)}\n`;
       }
-      
+
       if (context.company.employeeCount) {
         prompt += `Número de empleados: ${context.company.employeeCount}\n`;
       }
     }
-    
-    if (context.currentKPIs) {
-      prompt += `\nMÉTRICAS ACTUALES:\n`;
+
+    // Use real data if available, otherwise use provided context
+    if (realData) {
+      prompt += `\nDATA FINANCIERA REAL (ÚLTIMA ACTUALIZACIÓN):\n`;
+      prompt += `- Total facturas: ${realData.overview.totalInvoices}\n`;
+      prompt += `- Ingresos totales: ${this.formatCurrency(realData.overview.totalAmount)}\n`;
+      prompt += `- Facturas pendientes: ${realData.overview.pendingReview}\n`;
+      prompt += `- Procesadas este mes: ${realData.overview.processedThisMonth}\n`;
+
+      prompt += `\nIMPUESTOS Y RETENCIONES:\n`;
+      prompt += `- IVA: ${this.formatCurrency(realData.financial.taxes.iva)}\n`;
+      prompt += `- Retenciones: ${this.formatCurrency(realData.financial.taxes.retentions)}\n`;
+      prompt += `- ICA: ${this.formatCurrency(realData.financial.taxes.ica)}\n`;
+      prompt += `- Total impuestos: ${this.formatCurrency(realData.financial.taxes.total)}\n`;
+
+      prompt += `\nFLUJO DE CAJA:\n`;
+      prompt += `- Ingresos: ${this.formatCurrency(realData.financial.cashFlow.inflow)}\n`;
+      prompt += `- Egresos (impuestos): ${this.formatCurrency(realData.financial.cashFlow.outflow)}\n`;
+      prompt += `- Flujo neto: ${this.formatCurrency(realData.financial.cashFlow.net)}\n`;
+
+      if (realData.suppliers.top5.length > 0) {
+        prompt += `\nPRINCIPALES PROVEEDORES:\n`;
+        realData.suppliers.top5.forEach((supplier: any, index: number) => {
+          prompt += `${index + 1}. ${supplier.name}: ${this.formatCurrency(supplier.amount)} (${supplier.percentage.toFixed(1)}%)\n`;
+        });
+      }
+
+      prompt += `\nKPIs DE AUTOMATIZACIÓN:\n`;
+      prompt += `- Tasa de automatización: ${realData.kpis.automationRate.toFixed(1)}%\n`;
+      prompt += `- Precisión clasificación: ${realData.kpis.classificationAccuracy.toFixed(1)}%\n`;
+      prompt += `- Valor promedio factura: ${this.formatCurrency(realData.kpis.avgInvoiceValue)}\n`;
+      prompt += `- Carga tributaria: ${realData.kpis.taxBurden}%\n`;
+
+      if (realData.alerts.length > 0) {
+        prompt += `\nALERTAS RECIENTES:\n`;
+        realData.alerts.slice(0, 3).forEach((alert: any) => {
+          prompt += `- ${alert.title}: ${alert.message.substring(0, 100)}...\n`;
+        });
+      }
+
+    } else if (context.currentKPIs) {
+      prompt += `\nMÉTRICAS ESTIMADAS:\n`;
       prompt += `- Ingresos: ${this.formatCurrency(context.currentKPIs.revenue)}\n`;
       prompt += `- Gastos: ${this.formatCurrency(context.currentKPIs.expenses)}\n`;
       prompt += `- Carga tributaria: ${context.currentKPIs.taxBurden}%\n`;
       prompt += `- Flujo de caja: ${this.formatCurrency(context.currentKPIs.cashFlow)}\n`;
     }
-    
+
     return prompt;
   }
 
@@ -225,7 +278,7 @@ export class OpenAIService {
   /**
    * Fallback response when OpenAI is not available
    */
-  private getFallbackResponse(userMessage: string, context: ConversationContext): AIResponse {
+  private getFallbackResponse(userMessage: string, context: ConversationContext, realData?: any): AIResponse {
     const message = userMessage.toLowerCase();
     
     // Context-aware fallback responses

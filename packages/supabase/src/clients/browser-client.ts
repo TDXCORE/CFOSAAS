@@ -10,5 +10,23 @@ import { getSupabaseClientKeys } from '../get-supabase-client-keys';
 export function getSupabaseBrowserClient<GenericSchema = Database>() {
   const keys = getSupabaseClientKeys();
 
-  return createBrowserClient<GenericSchema>(keys.url, keys.anonKey);
+  return createBrowserClient<GenericSchema>(keys.url, keys.anonKey, {
+    auth: {
+      persistSession: true,
+      autoRefreshToken: true,
+      detectSessionInUrl: true,
+      flowType: 'pkce'
+    },
+    global: {
+      headers: {
+        'Cache-Control': 'no-cache',
+      },
+    },
+    // Configure for better Edge Runtime compatibility
+    realtime: {
+      params: {
+        eventsPerSecond: 10
+      }
+    }
+  });
 }
